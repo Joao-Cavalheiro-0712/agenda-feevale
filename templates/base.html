@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agenda Feevale</title>
+  <style>
+    :root {
+      --azul: #003a70; --azul2: #0064b0; --verde: #1a9e63;
+      --vermelho: #c0392b; --bg: #f4f6f9; --card: #ffffff; --borda: #e2e8f0;
+      --texto: #1a2733; --suave: #64748b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--texto); line-height: 1.5;
+    }
+    header {
+      background: linear-gradient(135deg, var(--azul), var(--azul2));
+      color: #fff; padding: 20px 16px;
+    }
+    header .wrap { max-width: 940px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+    header h1 { margin: 0; font-size: 1.4rem; }
+    header p { margin: 2px 0 0; opacity: .85; font-size: .85rem; }
+    .wrap { max-width: 940px; margin: 0 auto; padding: 0 16px; }
+    main { padding: 24px 0 60px; }
+    .card {
+      background: var(--card); border: 1px solid var(--borda); border-radius: 12px;
+      padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    h2 { margin: 0 0 14px; font-size: 1.1rem; }
+    label { display: block; font-size: .8rem; color: var(--suave); margin: 10px 0 4px; }
+    input[type=text], input[type=date], input[type=password], select, textarea {
+      width: 100%; padding: 9px 11px; border: 1px solid var(--borda); border-radius: 8px;
+      font-size: .95rem; font-family: inherit;
+    }
+    input[type=file] { width: 100%; padding: 10px; border: 2px dashed var(--borda); border-radius: 8px; background:#fafbfc; }
+    .btn {
+      display: inline-block; border: 0; border-radius: 8px; padding: 10px 16px;
+      font-size: .9rem; font-weight: 600; cursor: pointer; color: #fff; background: var(--azul2);
+      text-decoration: none;
+    }
+    .btn:hover { filter: brightness(1.05); }
+    .btn.verde { background: var(--verde); }
+    .btn.cinza { background: #6b7280; }
+    .btn.pequeno { padding: 5px 10px; font-size: .78rem; }
+    .btn.link { background: none; color: var(--vermelho); padding: 2px 4px; font-weight: 500; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .row > div { flex: 1; min-width: 140px; }
+    .flash { padding: 11px 14px; border-radius: 8px; margin-bottom: 14px; font-size: .9rem; }
+    .flash.success { background: #e6f7ed; color: #12704a; border: 1px solid #b6e6cd; }
+    .flash.error { background: #fdeceb; color: #9b2c22; border: 1px solid #f5c6c2; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--borda); font-size: .9rem; }
+    th { color: var(--suave); font-weight: 600; font-size: .78rem; text-transform: uppercase; }
+    .badge { font-size: .72rem; padding: 2px 8px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+    .badge.prova { background: #fdecea; color: #c0392b; }
+    .badge.trabalho { background: #eef3fd; color: #2563eb; }
+    .badge.avaliacao { background: #eafaf1; color: #1a9e63; }
+    .dias { font-weight: 700; }
+    .dias.urgente { color: var(--vermelho); }
+    .sub-chip { display:inline-block; background:#eef2f7; padding:4px 10px; border-radius:20px; font-size:.8rem; margin:2px; }
+    .muted { color: var(--suave); font-size: .85rem; }
+    details summary { cursor: pointer; font-weight: 600; margin-bottom: 10px; }
+    .status { display:inline-flex; gap:6px; align-items:center; font-size:.8rem; }
+    .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+    .dot.on { background: var(--verde); } .dot.off { background: #cbd5e1; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div style="font-size:2rem">🎓</div>
+      <div>
+        <h1>Agenda Feevale</h1>
+        <p>Notificações automáticas das suas avaliações no Telegram</p>
+      </div>
+    </div>
+  </header>
+  <main class="wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, msg in messages %}
+        <div class="flash {{ category }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

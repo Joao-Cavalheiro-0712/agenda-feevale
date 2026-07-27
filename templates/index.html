@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+  <h2>📎 Anexar cronograma</h2>
+  <p class="muted">
+    Envie os cronogramas em PDF, Word (.docx), Excel (.xlsx), CSV ou TXT.
+    O sistema lê o arquivo, identifica provas, trabalhos e avaliações com data e
+    cria os lembretes automaticamente.
+  </p>
+  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+    <input type="file" name="cronograma" accept=".pdf,.docx,.xlsx,.csv,.txt,.md" multiple required>
+    <div style="margin-top:14px">
+      <button class="btn" type="submit">Ler e criar eventos</button>
+    </div>
+  </form>
+  <p class="muted" style="margin-top:12px">
+    <span class="status"><span class="dot {{ 'on' if has_ai else 'off' }}"></span>
+      IA (Gemini): {{ 'ativa' if has_ai else 'desligada — usando extração por regex' }}</span>
+    &nbsp;·&nbsp;
+    <span class="status"><span class="dot {{ 'on' if has_bot else 'off' }}"></span>
+      Bot Telegram: {{ 'configurado' if has_bot else 'sem token' }}</span>
+  </p>
+</div>
+
+<div class="card">
+  <h2>🔔 Notificações</h2>
+  <p class="muted">
+    Aviso {{ reminder_days | join(' e ') }} dia(s) antes de cada avaliação.
+    Inscritos ativos: <b>{{ subscribers | length }}</b>
+  </p>
+  {% if subscribers %}
+    <div style="margin:8px 0">
+      {% for s in subscribers %}<span class="sub-chip">💬 {{ s.name or s.chat_id }}</span>{% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">Ninguém inscrito ainda. Abra seu bot no Telegram e envie <b>/start</b>.</p>
+  {% endif %}
+  <div class="row" style="margin-top:10px">
+    <form method="post" action="{{ url_for('test_notification') }}" style="flex:0">
+      <button class="btn cinza pequeno" type="submit">Enviar teste</button>
+    </form>
+    <form method="post" action="{{ url_for('run_reminders_now') }}" style="flex:0">
+      <button class="btn cinza pequeno" type="submit">Rodar verificação agora</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>📅 Próximas avaliações ({{ upcoming | length }})</h2>
+  {% if upcoming %}
+  <table>
+    <thead><tr><th>Data</th><th>Faltam</th><th>Tipo</th><th>Título</th><th>Disciplina</th><th></th></tr></thead>
+    <tbody>
+      {% for e in upcoming %}
+      {% set dias = (e.date - today).days %}
+      <tr>
+        <td>{{ e.date.strftime('%d/%m/%Y') }}</td>
+        <td><span class="dias {{ 'urgente' if dias <= 7 else '' }}">{{ dias }}d</span></td>
+        <td><span class="badge {{ e.kind }}">{{ e.kind }}</span></td>
+        <td>{{ e.title }}{% if e.notes %}<br><span class="muted">{{ e.notes }}</span>{% endif %}</td>
+        <td>{{ e.discipline or '—' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('delete_event', event_id=e.id) }}"
+                onsubmit="return confirm('Remover este evento?')">
+            <button class="btn link" type="submit">excluir</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="muted">Nenhuma avaliação futura. Anexe um cronograma acima.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <details>
+    <summary>➕ Adicionar avaliação manualmente</summary>
+    <form method="post" action="{{ url_for('add_event') }}">
+      <div class="row">
+        <div><label>Título</label><input type="text" name="title" required placeholder="Prova G1"></div>
+        <div><label>Data</label><input type="date" name="date" required></div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Tipo</label>
+          <select name="kind">
+            <option value="prova">Prova</option>
+            <option value="trabalho">Trabalho</option>
+            <option value="avaliacao">Avaliação</option>
+          </select>
+        </div>
+        <div><label>Disciplina</label><input type="text" name="discipline" placeholder="Cálculo I"></div>
+      </div>
+      <label>Observações</label>
+      <input type="text" name="notes" placeholder="Peso, capítulos, etc.">
+      <div style="margin-top:12px"><button class="btn verde" type="submit">Adicionar</button></div>
+    </form>
+  </details>
+</div>
+
+{% if past %}
+<div class="card">
+  <details>
+    <summary>🗂️ Avaliações passadas ({{ past | length }})</summary>
+    <table>
+      <thead><tr><th>Data</th><th>Tipo</th><th>Título</th><th>Disciplina</th><th></th></tr></thead>
+      <tbody>
+        {% for e in past %}
+        <tr>
+          <td>{{ e.date.strftime('%d/%m/%Y') }}</td>
+          <td><span class="badge {{ e.kind }}">{{ e.kind }}</span></td>
+          <td>{{ e.title }}</td>
+          <td>{{ e.discipline or '—' }}</td>
+          <td>
+            <form method="post" action="{{ url_for('delete_event', event_id=e.id) }}">
+              <button class="btn link" type="submit">excluir</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</div>
+{% endif %}
+
+{% endblock %}
