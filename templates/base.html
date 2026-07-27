@@ -96,11 +96,23 @@
     .legenda .l-prova::before { background:var(--vermelho); }
     .legenda .l-trabalho::before { background:#2563eb; }
     .legenda .l-avaliacao::before { background:var(--verde); }
+    .ev { cursor:pointer; }
+    .ev:hover { filter:brightness(1.08); }
     @media (max-width:640px) {
       .cal-cell { min-height:64px; padding:3px; }
       .ev { font-size:.6rem; padding:2px 3px; }
       .cal-cell .num { font-size:.7rem; }
     }
+    /* modal */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,.55);
+      z-index:50; align-items:center; justify-content:center; padding:16px; }
+    .modal-overlay.aberto { display:flex; }
+    .modal-box { background:#fff; border-radius:14px; padding:24px; max-width:440px; width:100%;
+      position:relative; box-shadow:0 20px 50px rgba(0,0,0,.25); }
+    .modal-x { position:absolute; top:12px; right:14px; border:0; background:none; font-size:1.7rem;
+      line-height:1; cursor:pointer; color:var(--suave); }
+    .modal-box h2 { font-size:1.25rem; }
+    .modal-box .btn { margin-right:8px; }
   </style>
 </head>
 <body>
