@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="cal-head">
+    <a class="cal-nav" href="{{ url_for('calendario', ano=prev.ano, mes=prev.mes) }}"
+       title="Mês anterior">‹</a>
+    <h2>{{ mes_nome }} de {{ ano }}</h2>
+    <a class="cal-nav" href="{{ url_for('calendario', ano=next.ano, mes=next.mes) }}"
+       title="Próximo mês">›</a>
+  </div>
+
+  <div class="cal-grid">
+    {% for d in dias_semana %}<div class="cab">{{ d }}</div>{% endfor %}
+
+    {% for semana in semanas %}
+      {% for dia in semana %}
+        {% set eventos = por_dia.get(dia.isoformat(), []) %}
+        <div class="cal-cell {{ 'fora' if dia.month != mes }} {{ 'hoje' if dia == today }}">
+          <div class="num">{{ dia.day }}</div>
+          {% for e in eventos %}
+            <div class="ev {{ e.kind }}"
+                 title="{{ e.title }}{% if e.discipline %} — {{ e.discipline }}{% endif %}{% if e.notes %} ({{ e.notes }}){% endif %}">
+              {{ e.title }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    {% endfor %}
+  </div>
+
+  <div class="legenda">
+    <span class="l-prova">Prova</span>
+    <span class="l-trabalho">Trabalho</span>
+    <span class="l-avaliacao">Avaliação</span>
+  </div>
+  <p class="muted" style="margin-top:10px">Passe o mouse sobre um evento para ver os detalhes.</p>
+</div>
+
+<div style="text-align:center;margin-top:8px">
+  <a class="btn cinza pequeno" href="{{ url_for('calendario', ano=today.year, mes=today.month) }}">Ir para hoje</a>
+</div>
+{% endblock %}

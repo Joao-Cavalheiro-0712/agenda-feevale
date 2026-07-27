@@ -1,6 +1,7 @@
 """Interface web (Flask) para anexar cronogramas e ver/gerir os eventos."""
 from __future__ import annotations
 
+import calendar as _calendar
 import datetime as dt
 import functools
 
@@ -80,6 +81,60 @@ def index():
         reminder_days=config.REMINDER_DAYS,
         has_ai=bool(config.GEMINI_API_KEY),
         has_bot=bool(config.TELEGRAM_BOT_TOKEN),
+    )
+
+
+_MESES_PT = [
+    "", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+]
+_DIAS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+
+
+@app.route("/calendario")
+@login_required
+def calendario():
+    today = dt.date.today()
+    try:
+        ano = int(request.args.get("ano", today.year))
+        mes = int(request.args.get("mes", today.month))
+        if not 1 <= mes <= 12:
+            raise ValueError
+    except (ValueError, TypeError):
+        ano, mes = today.year, today.month
+
+    cal = _calendar.Calendar(firstweekday=6)  # semana começa no domingo
+    semanas = cal.monthdatescalendar(ano, mes)
+
+    # Agrupa eventos por dia dentro do intervalo visível.
+    inicio, fim = semanas[0][0], semanas[-1][-1]
+    with SessionLocal() as db:
+        eventos = (
+            db.query(Event)
+            .filter(Event.date >= inicio, Event.date <= fim)
+            .order_by(Event.date)
+            .all()
+        )
+    por_dia: dict[str, list[Event]] = {}
+    for e in eventos:
+        por_dia.setdefault(e.date.isoformat(), []).append(e)
+
+    prev_mes = mes - 1 or 12
+    prev_ano = ano - 1 if mes == 1 else ano
+    next_mes = mes + 1 if mes < 12 else 1
+    next_ano = ano + 1 if mes == 12 else ano
+
+    return render_template(
+        "calendario.html",
+        semanas=semanas,
+        por_dia=por_dia,
+        mes=mes,
+        ano=ano,
+        mes_nome=_MESES_PT[mes],
+        dias_semana=_DIAS_PT,
+        today=today,
+        prev={"ano": prev_ano, "mes": prev_mes},
+        next={"ano": next_ano, "mes": next_mes},
     )
 
 

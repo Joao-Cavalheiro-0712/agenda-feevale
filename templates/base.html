@@ -65,6 +65,42 @@
     .status { display:inline-flex; gap:6px; align-items:center; font-size:.8rem; }
     .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
     .dot.on { background: var(--verde); } .dot.off { background: #cbd5e1; }
+    /* navegação */
+    nav.tabs { display:flex; gap:8px; margin-left:auto; }
+    nav.tabs a { color:#fff; text-decoration:none; padding:7px 14px; border-radius:8px;
+      font-size:.85rem; font-weight:600; background:rgba(255,255,255,.14); }
+    nav.tabs a.ativo { background:#fff; color:var(--azul); }
+    /* calendário */
+    .cal-head { display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+    .cal-head h2 { margin:0; flex:1; text-align:center; }
+    .cal-nav { width:40px; height:40px; border-radius:8px; display:flex; align-items:center;
+      justify-content:center; background:var(--bg); border:1px solid var(--borda); text-decoration:none;
+      color:var(--azul); font-size:1.2rem; font-weight:700; }
+    .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+    .cal-grid .cab { text-align:center; font-size:.72rem; font-weight:700; color:var(--suave);
+      text-transform:uppercase; padding:4px 0; }
+    .cal-cell { min-height:96px; border:1px solid var(--borda); border-radius:8px; padding:6px;
+      background:#fff; display:flex; flex-direction:column; gap:3px; }
+    .cal-cell.fora { background:#f8fafc; opacity:.5; }
+    .cal-cell .num { font-size:.8rem; font-weight:600; color:var(--suave); }
+    .cal-cell.hoje { border-color:var(--azul2); box-shadow:0 0 0 2px rgba(0,100,176,.18); }
+    .cal-cell.hoje .num { color:var(--azul2); }
+    .ev { font-size:.7rem; line-height:1.25; padding:3px 5px; border-radius:5px; color:#fff;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ev.prova { background:var(--vermelho); }
+    .ev.trabalho { background:#2563eb; }
+    .ev.avaliacao { background:var(--verde); }
+    .legenda { display:flex; gap:16px; margin-top:16px; font-size:.8rem; color:var(--suave); flex-wrap:wrap; }
+    .legenda span::before { content:''; display:inline-block; width:11px; height:11px; border-radius:3px;
+      margin-right:6px; vertical-align:-1px; }
+    .legenda .l-prova::before { background:var(--vermelho); }
+    .legenda .l-trabalho::before { background:#2563eb; }
+    .legenda .l-avaliacao::before { background:var(--verde); }
+    @media (max-width:640px) {
+      .cal-cell { min-height:64px; padding:3px; }
+      .ev { font-size:.6rem; padding:2px 3px; }
+      .cal-cell .num { font-size:.7rem; }
+    }
   </style>
 </head>
 <body>
@@ -75,6 +111,10 @@
         <h1>Agenda Feevale</h1>
         <p>Notificações automáticas das suas avaliações no Telegram</p>
       </div>
+      <nav class="tabs">
+        <a href="{{ url_for('index') }}" class="{{ 'ativo' if request.endpoint == 'index' }}">Lista</a>
+        <a href="{{ url_for('calendario') }}" class="{{ 'ativo' if request.endpoint == 'calendario' }}">Calendário</a>
+      </nav>
     </div>
   </header>
   <main class="wrap">
