@@ -1,0 +1,3 @@
+# Instala o antiword para ler arquivos .doc (formato binário antigo do Word).
+[phases.setup]
+aptPkgs = ["antiword"]

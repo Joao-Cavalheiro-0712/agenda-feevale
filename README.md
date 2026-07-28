@@ -95,7 +95,7 @@ python app.py             # http://localhost:8080
 ---
 
 ## Formatos de cronograma suportados
-PDF · Word (`.docx`) · Excel (`.xlsx`) · CSV · TXT
+PDF · Word (`.doc` e `.docx`) · Excel (`.xlsx`) · CSV · TXT
 
 O melhor resultado vem de cronogramas com **datas explícitas** (ex.: `15/04`,
 `15/04/2026`, `15 de abril`). A IA infere o ano pelo semestre corrente quando

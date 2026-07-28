@@ -4,12 +4,12 @@
 <div class="card">
   <h2>📎 Anexar cronograma</h2>
   <p class="muted">
-    Envie os cronogramas em PDF, Word (.docx), Excel (.xlsx), CSV ou TXT.
+    Envie os cronogramas em PDF, Word (.doc/.docx), Excel (.xlsx), CSV ou TXT.
     O sistema lê o arquivo, identifica provas, trabalhos e avaliações com data e
     cria os lembretes automaticamente.
   </p>
   <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
-    <input type="file" name="cronograma" accept=".pdf,.docx,.xlsx,.csv,.txt,.md" multiple required>
+    <input type="file" name="cronograma" accept=".pdf,.doc,.docx,.xlsx,.csv,.txt,.md" multiple required>
     <div style="margin-top:14px">
       <button class="btn" type="submit">Ler e criar eventos</button>
     </div>
