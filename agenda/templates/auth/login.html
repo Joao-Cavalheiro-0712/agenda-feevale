@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Entrar · {{ APP_NAME }}{% endblock %}
+{% block heading %}Entrar{% endblock %}
+{% block content %}
+<form method="post" style="margin-top:22px;max-width:380px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="field"><span>E-mail</span><input type="email" name="email" required autocomplete="email" autofocus></label>
+  <label class="field"><span>Senha</span><input type="password" name="password" required autocomplete="current-password"></label>
+  <button class="btn block" type="submit">Entrar</button>
+</form>
+<p class="tiny muted" style="margin-top:16px">Não tem conta? <a href="{{ url_for('auth.register') }}" style="color:var(--accent-text);font-weight:600">Criar agora</a></p>
+{% endblock %}

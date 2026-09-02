@@ -1,0 +1,25 @@
+{% from 'partials/icons.html' import icon %}
+{% macro event_item(card, checkable=True) %}
+<div class="item c-{{ card.color or 'slate' }} {{ 'done' if card.status == 'COMPLETED' }} {{ 'cancelled' if card.status == 'CANCELLED' }}">
+  <div class="rail"></div>
+  <div class="time {{ 'empty' if not card.time }}">{{ card.time or '—' }}</div>
+  <div class="body">
+    <a class="title" href="{% if card.id and not card.id.startswith('class:') %}{{ url_for('pages.event_detail', event_id=card.id) }}{% else %}{{ url_for('pages.subject_detail', subject_id=card.subject_id) }}{% endif %}">{{ card.title }}</a>
+    <div class="meta">
+      <span class="tag">{{ card.type_label }}</span>
+      {% if card.subject %}<span>{{ card.subject }}</span>{% endif %}
+      {% if card.location %}<span>· {{ card.location }}</span>{% endif %}
+      {% if card.status == 'OVERDUE' %}<span class="tag danger">Atrasado</span>{% endif %}
+      {% if card.note %}<span class="tag warning">{{ card.note }}</span>{% endif %}
+      {% if card.confidence is defined and card.confidence < 0.9 and card.source_type != 'MANUAL' %}
+        <span class="tag plain" title="Extraído automaticamente — confira">confira</span>
+      {% endif %}
+    </div>
+  </div>
+  {% if checkable and card.is_deadline and card.id and not card.id.startswith('class:') %}
+    <button class="check" type="button" data-event-id="{{ card.id }}"
+            aria-pressed="{{ 'true' if card.status == 'COMPLETED' else 'false' }}"
+            aria-label="Marcar {{ card.title }} como concluída">{{ icon('check') }}</button>
+  {% endif %}
+</div>
+{% endmacro %}

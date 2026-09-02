@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}Perfil · {{ APP_NAME }}{% endblock %}
+{% block heading %}Perfil{% endblock %}
+{% block content %}
+<form method="post" class="card" style="margin-top:8px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="field"><span>Nome</span><input type="text" name="name" value="{{ current_user.name }}"></label>
+  <label class="field"><span>Fuso horário</span><input type="text" name="timezone" value="{{ current_user.timezone }}"></label>
+  <label class="field"><span>Tema</span>
+    <select name="theme" onchange="setTheme(this.value)">
+      {% for value, label in [('system','Sistema'),('light','Claro'),('dark','Escuro')] %}
+        <option value="{{ value }}" {{ 'selected' if current_user.theme == value }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field"><span>Lembretes (dias antes, separados por vírgula)</span>
+    <input type="text" name="reminder_days" value="{{ current_user.reminder_days }}">
+    <span class="help">Padrão: 7 dias e 1 dia antes. Se a atividade for cadastrada em cima da hora, aplico só o que ainda dá tempo.</span>
+  </label>
+  <label style="display:flex;gap:10px;align-items:flex-start;margin:6px 0 14px;cursor:pointer">
+    <input type="checkbox" name="auto_create_enabled" {{ 'checked' if current_user.auto_create_enabled }} style="width:20px;height:20px;accent-color:var(--accent)">
+    <span><strong style="font-size:.92rem">Criar automaticamente quando eu tiver certeza</strong>
+      <span class="help">Com confiança alta eu já salvo e deixo o botão de desfazer. Desligando, eu sempre pergunto antes.</span></span>
+  </label>
+  <button class="btn block" type="submit">Salvar</button>
+</form>
+
+<section class="section">
+  <header><h3>Canais</h3></header>
+  <div class="card">
+    {% if links %}
+      {% for link in links %}
+        <div class="tiny" style="margin-bottom:6px">{{ link.channel|capitalize }} · {{ link.phone_e164 }} <span class="tag success">conectado</span></div>
+      {% endfor %}
+      <form method="post" action="{{ url_for('pages.disconnect') }}" style="margin-top:8px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn ghost sm" type="submit">Desvincular WhatsApp</button>
+      </form>
+    {% else %}
+      <p class="tiny muted" style="margin:0 0 10px">
+        Conecte o WhatsApp para mandar áudio, foto e cronograma sem abrir o app.
+        {% if not whatsapp_configured %}<br><em>(o número oficial ainda não está configurado neste ambiente)</em>{% endif %}
+      </p>
+      <a class="btn block" href="{{ url_for('pages.connect') }}">Conectar WhatsApp</a>
+    {% endif %}
+  </div>
+</section>
+
+<section class="section">
+  <header><h3>Contextos de estudo</h3></header>
+  {% for item in contexts %}
+    <div class="item"><div class="rail" style="background:var(--accent)"></div>
+      <div class="body"><div class="title">{{ item.title }}</div>
+        <div class="meta"><span>{{ item.subtitle or 'sem detalhes' }}</span>{% if item.is_active %}<span class="tag success">ativo</span>{% endif %}</div></div>
+    </div>
+  {% endfor %}
+  <a class="btn ghost block" href="{{ url_for('pages.onboarding') }}" style="margin-top:8px">Adicionar outro contexto</a>
+</section>
+
+<section class="section">
+  <header><h3>Seus dados</h3></header>
+  <div class="card">
+    <p class="tiny muted" style="margin:0 0 10px">Você pode levar seus dados embora ou apagar tudo quando quiser.</p>
+    <div class="stack">
+      <a class="btn ghost block" href="{{ url_for('api.export_data') }}" download>Exportar meus dados (JSON)</a>
+      <form method="post" action="{{ url_for('auth.delete_account') }}" onsubmit="return confirm('Excluir sua conta e todos os dados?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn ghost block" type="submit" style="color:var(--danger)">Excluir minha conta</button>
+      </form>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn soft block" type="submit">Sair</button>
+      </form>
+    </div>
+  </div>
+</section>
+<p class="tiny muted center" style="margin-bottom:30px">{{ APP_NAME }} v{{ version }}</p>
+{% endblock %}

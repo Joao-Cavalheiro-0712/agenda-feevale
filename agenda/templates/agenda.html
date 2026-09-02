@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% from 'partials/item.html' import event_item %}
+{% block title %}Agenda · {{ APP_NAME }}{% endblock %}
+{% block heading %}Agenda{% endblock %}
+{% block topbar_actions %}
+  <a class="btn sm ghost" href="{{ url_for('pages.week') }}">Semana</a>
+  <a class="btn sm ghost" href="{{ url_for('pages.deadlines') }}">Entregas</a>
+{% endblock %}
+{% block content %}
+{% if groups %}
+  {% set ns = namespace(month='') %}
+  {% for group in groups %}
+    {% if group.month_label != ns.month %}
+      <div class="month-label">{{ group.month_label }}</div>
+      {% set ns.month = group.month_label %}
+    {% endif %}
+    <div class="day-head {{ 'today' if group.is_today }}">
+      <span class="dnum">{{ group.day }}</span><span class="dwd">{{ group.weekday }}</span>
+    </div>
+    {% for card in group['items'] %}{{ event_item(card) }}{% endfor %}
+  {% endfor %}
+{% else %}
+  <div class="card empty">
+    <div class="art">📭</div>
+    <h4>Sua agenda está livre.</h4>
+    <p>Envie um cronograma ou conte o que você precisa lembrar.</p>
+    <div class="actions">
+      <a class="btn" href="{{ url_for('pages.documents') }}">Enviar cronograma</a>
+      <button class="btn ghost" type="button" data-sheet="capture-sheet">Falar com o assistente</button>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

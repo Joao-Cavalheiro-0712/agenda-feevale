@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon %}
+{% block title %}{{ event.title }} · {{ APP_NAME }}{% endblock %}
+{% block heading %}{{ card.type_label }}{% endblock %}
+{% block content %}
+<div class="card c-{{ card.color }}" style="border-left:4px solid var(--c)">
+  <h2 style="margin:0 0 6px;font-size:1.3rem;letter-spacing:-.02em">{{ event.title }}</h2>
+  <div class="meta muted" style="display:flex;gap:8px;flex-wrap:wrap">
+    <span class="tag">{{ card.type_label }}</span>
+    {% if card.subject %}<span>{{ card.subject }}</span>{% endif %}
+    <span>· {{ card.date_label }} ({{ card.when }})</span>
+    {% if card.time %}<span>· {{ card.time }}</span>{% endif %}
+    {% if card.location %}<span>· {{ card.location }}</span>{% endif %}
+  </div>
+  {% if event.description %}<p style="margin:12px 0 0;font-size:.94rem;white-space:pre-wrap">{{ event.description }}</p>{% endif %}
+  {% if event.weight or event.max_grade %}
+    <p class="tiny muted" style="margin:8px 0 0">Peso {{ event.weight or '—' }} · Nota máxima {{ event.max_grade or '—' }}</p>
+  {% endif %}
+</div>
+
+<section class="section">
+  <header><h3>Lembretes</h3></header>
+  <div class="card">
+    {% if event.reminders %}
+      {% for reminder in event.reminders|sort(attribute='scheduled_for') %}
+        <div class="step {{ 'done' if reminder.status == 'SENT' }}">
+          <span class="dot"></span>
+          <span>{{ reminder.offset_days }} dia(s) antes · {{ reminder.scheduled_for.strftime('%d/%m %H:%M') }} · {{ reminder.status|lower }}</span>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="tiny muted" style="margin:0">Sem lembretes pendentes.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="section">
+  <header><h3>Origem</h3></header>
+  <div class="card tiny muted">
+    {% if document %}
+      Importado de <a href="{{ url_for('pages.document_review', document_id=document.id) }}" style="color:var(--accent-text)">{{ document.filename }}</a>
+      {% if event.source_reference and event.source_reference.page %}· página {{ event.source_reference.page }}{% endif %}
+    {% elif event.source_type == 'WHATSAPP' %}
+      Criado a partir de uma mensagem no WhatsApp
+    {% elif event.source_type == 'VOICE' %}
+      Criado a partir de um áudio
+    {% elif event.source_type == 'SHARED' %}
+      Recebido de um colega
+    {% else %}
+      Criado por você
+    {% endif %}
+    · {{ event.created_at.strftime('%d/%m/%Y') }}
+    {% if event.confidence < 1 %}· confiança {{ (event.confidence * 100)|round|int }}%{% endif %}
+    {% if event.source_reference and event.source_reference.excerpt %}
+      <blockquote style="margin:8px 0 0;padding-left:10px;border-left:2px solid var(--border)">“{{ event.source_reference.excerpt }}”</blockquote>
+    {% endif %}
+  </div>
+</section>
+
+<div class="stack" style="margin-bottom:30px">
+  <button class="btn ghost block" type="button" data-sheet="edit-event">Editar</button>
+  <button class="btn ghost block" type="button" id="delete-event" style="color:var(--danger)">Remover</button>
+</div>
+
+<div class="sheet" id="edit-event" role="dialog" aria-modal="true" aria-label="Editar">
+  <div class="grabber"></div>
+  <h3>Editar</h3>
+  <form id="edit-form">
+    <label class="field"><span>Título</span><input type="text" name="title" value="{{ event.title }}"></label>
+    <div class="row">
+      <label class="field"><span>Data</span><input type="date" name="date" value="{{ event.local_date.isoformat() }}"></label>
+      <label class="field"><span>Horário</span><input type="time" name="start_time" value="{{ card.time }}"></label>
+    </div>
+    <label class="field"><span>Descrição</span><textarea name="description">{{ event.description }}</textarea></label>
+    <button class="btn block" type="submit">Salvar</button>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('edit-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(event.target).entries());
+  const result = await api('/api/events/{{ event.id }}', { method: 'PATCH', json: data });
+  toast(result.message || 'Salvo.');
+  setTimeout(() => location.reload(), 700);
+});
+document.getElementById('delete-event').addEventListener('click', async () => {
+  if (!confirm('Remover “{{ event.title|replace("'", "") }}”?')) return;
+  const result = await api('/api/events/{{ event.id }}', { method: 'DELETE' });
+  toast(result.message || 'Removido.', result.action_id);
+  setTimeout(() => location.href = '{{ url_for("pages.today") }}', 900);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}Seus estudos · {{ APP_NAME }}{% endblock %}
+{% block heading %}Onde você estuda?{% endblock %}
+{% block content %}
+<p class="muted" style="margin:8px 0 18px">Em menos de um minuto sua agenda começa a se montar sozinha.</p>
+
+<form method="post" id="onboarding">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="type" id="type" value="UNDERGRAD">
+
+  <div class="stack" id="passo-1">
+    {% for value, label in education_options %}
+      <button type="button" class="capture-option" data-type="{{ value }}">
+        <span class="ico">🎓</span><span><strong>{{ label }}</strong></span>
+      </button>
+    {% endfor %}
+  </div>
+
+  <div id="passo-2" hidden>
+    <div class="card">
+      <label class="field"><span data-label="institution">Instituição</span><input type="text" name="institution" placeholder="Ex.: Feevale"></label>
+      <label class="field" data-only="UNDERGRAD,POSTGRAD,TECHNICAL,FREE_COURSE"><span>Curso</span><input type="text" name="course_name" placeholder="Ex.: Direito"></label>
+      <label class="field" data-only="ELEMENTARY,MIDDLE_SCHOOL,HIGH_SCHOOL"><span>Ano / série</span><input type="text" name="grade_name" placeholder="Ex.: 7º ano"></label>
+      <div class="row">
+        <label class="field" data-only="UNDERGRAD,POSTGRAD"><span>Semestre</span><input type="text" name="semester" placeholder="1º semestre"></label>
+        <label class="field" data-only="TECHNICAL"><span>Módulo</span><input type="text" name="module" placeholder="Módulo 2"></label>
+        <label class="field" data-only="ELEMENTARY,MIDDLE_SCHOOL,HIGH_SCHOOL"><span>Turma</span><input type="text" name="class_name" placeholder="Turma B"></label>
+        <label class="field"><span>Turno</span>
+          <select name="shift">
+            <option value="">—</option><option value="manha">Manhã</option>
+            <option value="tarde">Tarde</option><option value="noite">Noite</option>
+            <option value="integral">Integral</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="field"><span>Início do período</span><input type="date" name="starts_on"></label>
+        <label class="field"><span>Fim do período</span><input type="date" name="ends_on"></label>
+      </div>
+      <button class="btn block" type="submit">Continuar</button>
+      <p class="help">Depois você pode enviar seus cronogramas ou simplesmente contar o que tem — eu cadastro as matérias.</p>
+    </div>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('[data-type]').forEach(button => button.addEventListener('click', () => {
+  const value = button.dataset.type;
+  document.getElementById('type').value = value;
+  document.getElementById('passo-1').hidden = true;
+  document.getElementById('passo-2').hidden = false;
+  document.querySelectorAll('[data-only]').forEach(field => {
+    field.hidden = !field.dataset.only.split(',').includes(value);
+  });
+  const schoolish = ['ELEMENTARY','MIDDLE_SCHOOL','HIGH_SCHOOL'].includes(value);
+  document.querySelector('[data-label=institution]').textContent = schoolish ? 'Escola' : 'Instituição';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}));
+</script>
+{% endblock %}

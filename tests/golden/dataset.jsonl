@@ -1,0 +1,18 @@
+{"id": "grad-trabalho-audio", "input": "A professora de Civil pediu um trabalho sobre responsabilidade civil para dia 23. Vale 2 pontos.", "subjects": ["Direito Civil"], "expected_intent": "CREATE_EVENT", "expected": {"type": "ASSIGNMENT", "day": 23, "subject": "Direito Civil"}}
+{"id": "grad-prova-professor", "input": "O professor Ricardo marcou prova sexta", "subjects": ["Direito Penal"], "teachers": {"Direito Penal": "Ricardo Silva"}, "expected_intent": "CREATE_EVENT", "expected": {"type": "EXAM", "weekday": 4, "subject": "Direito Penal"}}
+{"id": "fundamental-material", "input": "Tem que levar cartolina e cola para Artes na quarta", "subjects": ["Artes"], "expected_intent": "CREATE_EVENT", "expected": {"type": "MATERIAL", "weekday": 2, "subject": "Artes"}}
+{"id": "medio-prova-conteudo", "input": "Professor de física marcou prova sexta sobre cinemática", "subjects": ["Física"], "expected_intent": "CREATE_EVENT", "expected": {"type": "EXAM", "weekday": 4, "subject": "Física"}}
+{"id": "tecnico-relatorio", "input": "Relatório do laboratório de elétrica é para dia 22", "subjects": ["Eletricidade"], "expected_intent": "CREATE_EVENT", "expected": {"type": "LAB", "day": 22}}
+{"id": "fundamental-tema", "input": "A professora de matemática pediu exercícios 20 a 35 para segunda", "subjects": ["Matemática"], "expected_intent": "CREATE_EVENT", "expected": {"type": "HOMEWORK", "weekday": 0, "subject": "Matemática"}}
+{"id": "leitura", "input": "Ler os capítulos 3 e 4 de Português até sexta", "subjects": ["Português"], "expected_intent": "CREATE_EVENT", "expected": {"type": "READING", "weekday": 4}}
+{"id": "seminario", "input": "Seminário de Sociologia dia 20/10", "subjects": ["Sociologia"], "expected_intent": "CREATE_EVENT", "expected": {"type": "SEMINAR", "day": 20}}
+{"id": "simulado", "input": "Simulado do ENEM domingo", "subjects": [], "expected_intent": "CREATE_EVENT", "expected": {"type": "SIMULATION", "weekday": 6}}
+{"id": "apresentacao", "input": "Apresentação do trabalho de Geografia na próxima terça", "subjects": ["Geografia"], "expected_intent": "CREATE_EVENT", "expected": {"type": "PRESENTATION", "weekday": 1}}
+{"id": "consulta-semana", "input": "O que eu tenho essa semana?", "subjects": [], "expected_intent": "GET_WEEK", "expected": {}}
+{"id": "consulta-hoje", "input": "O que eu tenho hoje?", "subjects": [], "expected_intent": "GET_TODAY", "expected": {}}
+{"id": "consulta-atrasado", "input": "Tenho alguma coisa atrasada?", "subjects": [], "expected_intent": "GET_OVERDUE", "expected": {}}
+{"id": "consulta-proxima-prova", "input": "Quando é minha próxima prova?", "subjects": [], "expected_intent": "GET_NEXT_EVENTS", "expected": {}}
+{"id": "sem-data", "input": "A professora de história passou um trabalho", "subjects": ["História"], "expected_intent": "CREATE_EVENT", "expected": {"needs_clarification": true}}
+{"id": "ancora-proxima-aula", "input": "Entregar o fichamento de Filosofia na próxima aula", "subjects": ["Filosofia"], "expected_intent": "CREATE_EVENT", "expected": {"needs_clarification": true}}
+{"id": "aula-recorrente", "input": "Tenho Penal segunda e quarta das sete e meia às nove e meia", "subjects": [], "expected_intent": "CREATE_CLASS_SCHEDULE", "expected": {"weekday": 0, "start_time": "19:30", "end_time": "21:30"}}
+{"id": "materia-abreviada", "input": "Prova de Const dia 12/11", "subjects": ["Direito Constitucional I"], "expected_intent": "CREATE_EVENT", "expected": {"type": "EXAM", "subject": "Direito Constitucional I", "day": 12}}

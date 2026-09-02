@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Conectar WhatsApp · {{ APP_NAME }}{% endblock %}
+{% block heading %}Conectar WhatsApp{% endblock %}
+{% block content %}
+<div class="card" style="margin-top:8px">
+  <p style="margin:0 0 14px">Abra a conversa com o número oficial e envie o código abaixo. Ele vale por 30 minutos e só pode ser usado uma vez.</p>
+  <div class="center" style="font-size:1.9rem;font-weight:750;letter-spacing:.22em;padding:16px;background:var(--surface-2);border-radius:var(--r-md)">
+    {{ token.token }}
+  </div>
+  {% if configured and whatsapp_number %}
+    <a class="btn block" style="margin-top:14px" href="{{ deep_link }}">Abrir no WhatsApp</a>
+    <p class="tiny muted center" style="margin-top:8px">{{ whatsapp_number }}</p>
+  {% else %}
+    <p class="tiny muted" style="margin-top:14px">
+      O número oficial do WhatsApp ainda não está configurado neste ambiente.
+      Defina <code>WHATSAPP_TOKEN</code>, <code>WHATSAPP_PHONE_NUMBER_ID</code> e <code>WHATSAPP_NUMBER</code>.
+    </p>
+  {% endif %}
+</div>
+
+<section class="section">
+  <header><h3>O que dá para fazer por lá</h3></header>
+  <div class="card tiny">
+    <p style="margin:0 0 6px">• “Prova de Penal dia 23” — cria a avaliação</p>
+    <p style="margin:0 0 6px">• Áudio saindo da aula — eu transcrevo e organizo</p>
+    <p style="margin:0 0 6px">• Foto do quadro ou print do portal</p>
+    <p style="margin:0 0 6px">• Cronograma em PDF</p>
+    <p style="margin:0">• “O que tenho essa semana?”</p>
+  </div>
+</section>
+{% endblock %}

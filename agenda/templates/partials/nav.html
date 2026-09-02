@@ -1,0 +1,17 @@
+{% from 'partials/icons.html' import icon %}
+<nav class="nav" aria-label="Navegação principal">
+  <div class="brand">{{ APP_NAME }}</div>
+  <a href="{{ url_for('pages.today') }}" class="{{ 'active' if active == 'today' }}" {{ 'aria-current=page' if active == 'today' }}>
+    {{ icon('home') }}<span>Hoje</span>
+  </a>
+  <a href="{{ url_for('pages.agenda') }}" class="{{ 'active' if active == 'agenda' }}">
+    {{ icon('calendar') }}<span>Agenda</span>
+  </a>
+  <button type="button" class="fab" data-sheet="capture-sheet" aria-label="Adicionar">{{ icon('plus') }}</button>
+  <a href="{{ url_for('pages.subjects') }}" class="{{ 'active' if active == 'subjects' }}">
+    {{ icon('book') }}<span>Matérias</span>
+  </a>
+  <a href="{{ url_for('pages.profile') }}" class="{{ 'active' if active == 'profile' }}">
+    {{ icon('user') }}<span>Perfil</span>
+  </a>
+</nav>

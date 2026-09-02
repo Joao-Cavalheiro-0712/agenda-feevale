@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% from 'partials/item.html' import event_item %}
+{% block title %}{{ subject.name }} · {{ APP_NAME }}{% endblock %}
+{% block heading %}{{ subject.display }}{% endblock %}
+{% block topbar_actions %}
+  <button class="btn sm ghost" type="button" data-sheet="edit-subject">Editar</button>
+{% endblock %}
+{% block content %}
+<div class="card c-{{ subject.color }}" style="border-left:4px solid var(--c)">
+  <div class="row" style="gap:18px;flex-wrap:wrap">
+    <div><div class="tiny muted">Próxima aula</div>
+      <strong>{% if view.next_class %}{{ view.next_class.date | date_pt }} · {{ view.next_class.start_time }}{% else %}—{% endif %}</strong></div>
+    <div><div class="tiny muted">Professor</div><strong>{{ subject.teacher.name if subject.teacher else '—' }}</strong></div>
+    <div><div class="tiny muted">Local</div><strong>{{ subject.default_location.label if subject.default_location else '—' }}</strong></div>
+  </div>
+  {% if view.schedules %}
+    <hr class="divider">
+    <div class="tiny muted" style="margin-bottom:6px">Horários</div>
+    {% for schedule in view.schedules %}
+      <div class="tiny">{{ schedule.weekday }} · {{ schedule.start_time }}–{{ schedule.end_time }}{% if schedule.location %} · {{ schedule.location }}{% endif %}</div>
+    {% endfor %}
+  {% endif %}
+</div>
+
+<section class="section">
+  <header><h3>Próximas atividades</h3></header>
+  {% if view.upcoming %}
+    {% for card in view.upcoming %}{{ event_item(card) }}{% endfor %}
+  {% else %}
+    <p class="tiny muted">Nada marcado ainda para esta matéria.</p>
+  {% endif %}
+</section>
+
+{% if view.past %}
+<section class="section">
+  <header><h3>Já passou</h3></header>
+  {% for card in view.past %}{{ event_item(card, checkable=False) }}{% endfor %}
+</section>
+{% endif %}
+
+<section class="section">
+  <header><h3>Horário</h3></header>
+  <form method="post" action="{{ url_for('pages.create_schedule', subject_id=subject.id) }}" class="card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="row">
+      <label class="field"><span>Dia</span>
+        <select name="weekday">
+          {% for label in ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'] %}
+            <option value="{{ loop.index0 }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field"><span>Início</span><input type="time" name="start_time" required></label>
+      <label class="field"><span>Fim</span><input type="time" name="end_time"></label>
+    </div>
+    <div class="row">
+      <label class="field"><span>Prédio</span><input type="text" name="location_name"></label>
+      <label class="field"><span>Sala</span><input type="text" name="room"></label>
+    </div>
+    <button class="btn block" type="submit">Adicionar horário</button>
+  </form>
+</section>
+
+{% if flag('sharing_enabled') %}
+<form method="post" action="{{ url_for('pages.share_subject', subject_id=subject.id) }}" style="margin-bottom:24px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button class="btn ghost block" type="submit">Compartilhar com a turma</button>
+</form>
+{% endif %}
+
+<div class="sheet" id="edit-subject" role="dialog" aria-modal="true" aria-label="Editar matéria">
+  <div class="grabber"></div>
+  <h3>Editar matéria</h3>
+  <form method="post" action="{{ url_for('pages.update_subject', subject_id=subject.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field"><span>Nome</span><input type="text" name="name" value="{{ subject.name }}" required></label>
+    <div class="row">
+      <label class="field"><span>Apelido</span><input type="text" name="short_name" value="{{ subject.short_name }}"></label>
+      <label class="field"><span>Professor(a)</span><input type="text" name="teacher_name" value="{{ subject.teacher.name if subject.teacher else '' }}" list="teachers"></label>
+    </div>
+    <datalist id="teachers">{% for teacher in teachers %}<option value="{{ teacher.name }}">{% endfor %}</datalist>
+    <label class="field"><span>Cor</span>
+      <select name="color">{% for color in colors %}<option value="{{ color }}" {{ 'selected' if color == subject.color }}>{{ color }}</option>{% endfor %}</select>
+    </label>
+    <label class="field"><span>Situação</span>
+      <select name="status">
+        {% for value, label in [('ACTIVE','Cursando'),('COMPLETED','Concluída'),('ARCHIVED','Arquivada'),('DROPPED','Trancada')] %}
+          <option value="{{ value }}" {{ 'selected' if value == subject.status }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field"><span>Apelidos extras</span><input type="text" name="aliases" placeholder="const, consti"></label>
+    <label class="field"><span>Observações</span><textarea name="notes">{{ subject.notes }}</textarea></label>
+    <button class="btn block" type="submit">Salvar</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}{{ APP_NAME }} — seu planner acadêmico automático{% endblock %}
+{% block topbar %}{% endblock %}
+{% block content %}
+<div style="padding:48px 0 32px">
+  <p class="tag" style="background:var(--accent-soft);color:var(--accent-text)">Planner acadêmico com IA</p>
+  <h2 style="font-size:2.1rem;line-height:1.15;letter-spacing:-.035em;margin:14px 0 12px">
+    Você manda.<br>Ele organiza.
+  </h2>
+  <p class="muted" style="font-size:1.02rem;max-width:34ch">
+    Cronograma em PDF, foto do quadro, print do portal ou um áudio de 10 segundos
+    saindo da aula. Vira agenda, com lembrete na hora certa.
+  </p>
+  <div class="stack" style="margin-top:24px;max-width:320px">
+    <a class="btn block" href="{{ url_for('auth.register') }}">Criar minha conta</a>
+    <a class="btn ghost block" href="{{ url_for('auth.login') }}">Já tenho conta</a>
+  </div>
+</div>
+
+<div class="stack" style="margin-bottom:40px">
+  <div class="card">
+    <strong>Manda o cronograma inteiro</strong>
+    <p class="muted tiny" style="margin:4px 0 0">PDF, Word, planilha ou foto. Eu leio, separo matérias, provas e entregas — e mostro tudo para você revisar antes de salvar.</p>
+  </div>
+  <div class="card">
+    <strong>Fala, não digita</strong>
+    <p class="muted tiny" style="margin:4px 0 0">“A professora de Civil pediu um trabalho para dia 23, vale 2 pontos.” Pronto: está na agenda, com lembrete 7 dias e 1 dia antes.</p>
+  </div>
+  <div class="card">
+    <strong>Também pelo WhatsApp</strong>
+    <p class="muted tiny" style="margin:4px 0 0">{% if whatsapp_number %}Fale com {{ whatsapp_number }}.{% else %}Conecte seu número e use o app sem abrir o app.{% endif %} Texto, áudio, foto e documento.</p>
+  </div>
+</div>
+{% endblock %}

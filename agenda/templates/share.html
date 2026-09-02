@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}{{ collection.title }} · {{ APP_NAME }}{% endblock %}
+{% block heading %}Turma compartilhada{% endblock %}
+{% block content %}
+<div class="card" style="margin-top:8px">
+  <h2 style="margin:0 0 4px;font-size:1.35rem;letter-spacing:-.02em">{{ collection.title }}</h2>
+  {% if snapshot.teacher %}<p class="muted tiny" style="margin:0">Professor(a) {{ snapshot.teacher }}</p>{% endif %}
+  {% for schedule in snapshot.schedules %}
+    <p class="tiny muted" style="margin:2px 0 0">{{ schedule.weekday }} · {{ schedule.start_time }}–{{ schedule.end_time }}</p>
+  {% endfor %}
+  <p style="margin:12px 0 0;font-size:.95rem">{{ snapshot['events']|length }} atividades já cadastradas</p>
+</div>
+
+<section class="section">
+  <header><h3>O que vem junto</h3></header>
+  {% for item in snapshot['events'][:12] %}
+    <div class="item"><div class="rail" style="background:var(--border-strong)"></div>
+      <div class="time empty" style="min-width:56px;font-size:.78rem">{{ item.date[8:10] }}/{{ item.date[5:7] }}</div>
+      <div class="body"><div class="title">{{ item.title }}</div></div></div>
+  {% endfor %}
+</section>
+
+{% if logged_in %}
+  <form method="post" style="margin-bottom:30px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn block" type="submit">Adicionar à minha agenda</button>
+    <p class="help">Você escolhe adicionar — nada é copiado sem sua confirmação.</p>
+  </form>
+{% else %}
+  <a class="btn block" href="{{ url_for('auth.register') }}">Criar conta e adicionar</a>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from 'partials/item.html' import event_item %}
+{% block title %}Buscar · {{ APP_NAME }}{% endblock %}
+{% block heading %}Buscar{% endblock %}
+{% block content %}
+<form method="get" style="margin-top:8px">
+  <input type="search" name="q" value="{{ query }}" placeholder="prova de história de outubro" autofocus aria-label="Buscar">
+</form>
+{% if query %}
+  {% if results.subjects %}
+    <section class="section"><header><h3>Matérias</h3></header>
+      {% for subject in results.subjects %}
+        <a class="item c-{{ subject.color }}" href="{{ url_for('pages.subject_detail', subject_id=subject.id) }}">
+          <div class="rail"></div><div class="body"><div class="title">{{ subject.name }}</div></div>
+        </a>
+      {% endfor %}
+    </section>
+  {% endif %}
+  <section class="section"><header><h3>Compromissos</h3></header>
+    {% if results.events %}{% for card in results.events %}{{ event_item(card, checkable=False) }}{% endfor %}
+    {% else %}<p class="tiny muted">Nada encontrado para “{{ query }}”.</p>{% endif %}
+  </section>
+{% endif %}
+{% endblock %}

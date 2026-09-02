@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from 'partials/item.html' import event_item %}
+{% block title %}Período · {{ APP_NAME }}{% endblock %}
+{% block heading %}Linha do tempo{% endblock %}
+{% block content %}
+<p class="muted tiny" style="margin:6px 0 14px">Onde estão as semanas mais pesadas do seu período.</p>
+<div class="card">
+  <div class="timeline">
+    {% for week in view.weeks %}
+      <div class="bar {{ 'current' if week.is_current }}" title="{{ week.label }} — {{ week.count }} compromissos">
+        <span class="fill" style="height:{{ (week.intensity * 100)|round|int }}%"></span>
+        <span class="lbl">{{ week.label[:2] }}</span>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% for week in view.weeks if week['items'] %}
+  <section class="section">
+    <header><h3>Semana de {{ week.label }}</h3>{% if week.load >= view.max_load %}<span class="tag warning">semana crítica</span>{% endif %}</header>
+    {% for card in week['items'] %}{{ event_item(card) }}{% endfor %}
+  </section>
+{% endfor %}
+{% endblock %}

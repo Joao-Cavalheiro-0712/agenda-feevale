@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% from 'partials/item.html' import event_item %}
+{% block title %}Entregas · {{ APP_NAME }}{% endblock %}
+{% block heading %}Entregas{% endblock %}
+{% block content %}
+{% if groups %}
+  {% for group in groups %}
+    <section class="section">
+      <header><h3>{{ group.label }}</h3><span class="tag plain">{{ group['items']|length }}</span></header>
+      {% for card in group['items'] %}{{ event_item(card) }}{% endfor %}
+    </section>
+  {% endfor %}
+{% else %}
+  <div class="card empty">
+    <div class="art">✅</div>
+    <h4>Nenhuma entrega pendente.</h4>
+    <p>Quando algo aparecer no cronograma, eu coloco aqui.</p>
+    <div class="actions"><button class="btn" type="button" data-sheet="capture-sheet">Adicionar entrega</button></div>
+  </div>
+{% endif %}
+{% endblock %}

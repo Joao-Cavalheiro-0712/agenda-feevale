@@ -1,0 +1,35 @@
+{% from 'partials/icons.html' import icon %}
+<div class="sheet" id="capture-sheet" role="dialog" aria-modal="true" aria-label="Adicionar">
+  <div class="grabber"></div>
+  <h3>O que aconteceu?</h3>
+
+  <form data-capture-form autocomplete="off">
+    <div class="composer">
+      <textarea name="text" rows="2" placeholder="Ex.: prova de Civil sexta sobre contratos" aria-label="Conte o que precisa lembrar"></textarea>
+      <button type="button" class="mic" onclick="toggleRecording(this)" aria-label="Gravar áudio">{{ icon('mic') }}</button>
+      <button type="submit" class="btn" aria-label="Enviar">{{ icon('check') }}</button>
+    </div>
+    <p class="help" data-capture-status></p>
+  </form>
+
+  <div data-capture-result class="stack" style="margin:12px 0"></div>
+
+  <div class="capture-options" style="margin-top:8px">
+    <label class="capture-option">
+      <span class="ico">{{ icon('file') }}</span>
+      <span><strong>Enviar documento</strong><small>PDF, Word, planilha, foto do cronograma</small></span>
+      <input type="file" data-capture-file class="sr-only" accept=".pdf,.doc,.docx,.xlsx,.csv,.txt,image/*">
+    </label>
+    <label class="capture-option">
+      <span class="ico">{{ icon('camera') }}</span>
+      <span><strong>Tirar foto</strong><small>Quadro, mural, agenda impressa</small></span>
+      <input type="file" data-capture-file class="sr-only" accept="image/*" capture="environment">
+    </label>
+    <a class="capture-option" href="{{ url_for('pages.assistant_page') }}">
+      <span class="ico">{{ icon('sparkles') }}</span>
+      <span><strong>Falar com o assistente</strong><small>“O que eu tenho essa semana?”</small></span>
+    </a>
+  </div>
+
+  <button type="button" class="btn ghost block" data-close-sheet style="margin-top:12px">Fechar</button>
+</div>

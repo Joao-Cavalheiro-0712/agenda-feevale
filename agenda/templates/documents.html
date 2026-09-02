@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon %}
+{% block title %}Documentos · {{ APP_NAME }}{% endblock %}
+{% block heading %}Documentos{% endblock %}
+{% block content %}
+<form method="post" enctype="multipart/form-data" class="card" style="margin-top:8px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <strong>Já tem seus cronogramas?</strong>
+  <p class="tiny muted" style="margin:4px 0 12px">Joga tudo aqui: PDF, Word, planilha, print ou foto. Você revisa antes de eu salvar.</p>
+  <label class="field">
+    <span class="sr-only">Arquivos</span>
+    <input type="file" name="files" multiple accept=".pdf,.doc,.docx,.xlsx,.csv,.txt,image/*" required
+           style="border:2px dashed var(--border);background:var(--surface-2);padding:16px;border-radius:var(--r-md)">
+  </label>
+  <button class="btn block" type="submit">Enviar</button>
+</form>
+
+{% if items %}
+  <section class="section">
+    <header><h3>Enviados</h3></header>
+    {% for document, summary in items %}
+      <a class="item" href="{{ url_for('pages.document_review', document_id=document.id) }}">
+        <div class="rail" style="background:var(--border-strong)"></div>
+        <div class="body">
+          <div class="title">{{ document.filename }}</div>
+          <div class="meta">
+            {% if document.status == 'IMPORTED' %}<span class="tag success">✓ Importado</span>
+            {% elif document.status == 'NEEDS_REVIEW' %}<span class="tag warning">{{ summary.needs_review }} para revisar</span>
+            {% elif document.status == 'FAILED' %}<span class="tag danger">Falhou</span>
+            {% else %}<span class="tag plain">{{ document.status|lower }}</span>{% endif %}
+            <span>· {{ summary.events }} atividades</span>
+            {% if summary.schedules %}<span>· {{ summary.schedules }} aulas</span>{% endif %}
+          </div>
+        </div>
+      </a>
+    {% endfor %}
+  </section>
+{% else %}
+  <div class="card empty">
+    <div class="art">📄</div>
+    <h4>Nenhum documento ainda.</h4>
+    <p>O jeito mais rápido de montar o semestre inteiro é mandar o cronograma.</p>
+  </div>
+{% endif %}
+{% endblock %}
