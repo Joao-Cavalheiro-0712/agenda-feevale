@@ -18,7 +18,7 @@ from agenda.ai.providers import ai_available, get_provider, record_usage
 from agenda.core import academic, duplicates, planner, privacy, recurrence
 from agenda.core.actions import ActionProposal, Intent
 from agenda.core.dates import resolve_expression
-from agenda.core.text import norm
+from agenda.core.text import enumerate_pt, norm
 from agenda.models import EventType, Subject, User
 
 
@@ -399,7 +399,7 @@ def _resolve_subject_reference(
             return resolucao.subject, "", [], resolucao.learn_terms
         if resolucao.ambiguous:
             opcoes = resolucao.subject_options
-            nomes = " ou ".join(s.display for s in opcoes[:3])
+            nomes = enumerate_pt([s.display for s in opcoes[:3]])
             return (
                 None,
                 f"É de {nomes}?" if len(opcoes) <= 3 else "De qual matéria você está falando?",

@@ -415,11 +415,18 @@ input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--ink); }
 
 .toast {
   position: fixed; left: 50%; bottom: calc(var(--nav-h) + var(--s4)); z-index: 70;
+  /* width: max-content é obrigatório aqui. Um elemento fixo com left:50% e sem
+     largura declarada encolhe para caber na metade direita da tela (195px num
+     celular), e o max-width abaixo nunca chega a valer — a mensagem sai com
+     uma palavra por linha, justamente no lugar onde mora o "Desfazer". */
+  width: max-content; max-width: min(92vw, 520px);
   transform: translate(-50%, 160%); transition: transform .32s cubic-bezier(.32,.72,0,1);
   background: var(--ink); color: var(--paper); padding: 12px var(--s4); border-radius: var(--r-sm);
   font-size: .86rem; display: flex; align-items: center; gap: var(--s4);
-  box-shadow: var(--lift-2); max-width: min(92vw, 520px);
+  box-shadow: var(--lift-2);
 }
+.toast span { min-width: 0; }
+.toast button { flex: none; }
 .toast.show { transform: translate(-50%, 0); }
 .toast button { background: none; border: 0; cursor: pointer; font-weight: 700; font-size: .82rem;
   color: var(--grifo); letter-spacing: .02em; }

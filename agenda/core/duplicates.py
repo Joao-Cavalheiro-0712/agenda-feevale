@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from agenda.core.text import norm, slug_key
+from agenda.knowledge import fuzzy
 from agenda.models import Event, EventStatus
 
 # Palavras que, no texto do usuário, indicam remarcação e não um novo evento.
@@ -68,8 +69,17 @@ def find_reschedule_candidate(
 ) -> Event | None:
     """Procura um evento parecido em outra data — provável remarcação (SPEC §14).
 
-    Só considera candidatos da mesma família de tipo e da mesma disciplina;
-    sem disciplina, exige forte semelhança de título.
+    A regra decisiva é: **dois assuntos específicos e diferentes são dois
+    eventos.** "Trabalho sobre habeas corpus" e "trabalho sobre execução
+    penal" são a mesma matéria e o mesmo tipo, e não têm nada a ver um com o
+    outro — perguntar "é essa que mudou de data?" nesse caso viraria atrito em
+    quase toda captura, porque um semestre normal tem vários trabalhos por
+    matéria.
+
+    Então mesma disciplina + mesmo tipo só conta como sinal forte quando pelo
+    menos um dos títulos é **genérico** ("Prova de Civil" versus "Prova"), que
+    é o caso real de remarcação. Título específico contra título específico
+    exige que os assuntos se pareçam de verdade.
     """
     low = new_date - dt.timedelta(days=window_days)
     high = new_date + dt.timedelta(days=window_days)
@@ -86,28 +96,57 @@ def find_reschedule_candidate(
     if not candidates:
         return None
 
-    target = slug_key(title)
+    # O nome da matéria também não é assunto: "Prova de Direito Civil" é um
+    # título genérico, porque não diz sobre o que a prova é.
+    nome_materia = ""
+    if candidates and candidates[0].subject is not None:
+        nome_materia = candidates[0].subject.name
+
+    assunto_novo = _topic(title, nome_materia)
     best, best_score = None, 0.0
     for candidate in candidates:
-        score = _similarity(target, slug_key(candidate.title))
-        if subject_id and score < 0.35:
-            # Mesma disciplina + mesmo tipo já é sinal forte (ex.: "Prova 1" vs "Prova").
-            score = 0.5
+        assunto_antigo = _topic(candidate.title, nome_materia)
+        if assunto_novo and assunto_antigo:
+            # Os dois lados dizem sobre o que são: decide a semelhança do assunto.
+            score = fuzzy.similarity(assunto_novo, assunto_antigo)
+        elif subject_id:
+            # Algum lado é genérico ("Prova", "Trabalho"): aí mesma matéria e
+            # mesmo tipo realmente sugerem que é o mesmo compromisso.
+            score = 0.6
+        else:
+            # Sem matéria identificada e com título genérico não há evidência
+            # nenhuma: dois compromissos quaisquer do mesmo tipo no mês não são
+            # o mesmo compromisso. Aqui só o texto explícito ("passou para")
+            # justifica remarcar, e isso quem decide é o chamador.
+            score = 0.0
         if score > best_score:
             best, best_score = candidate, score
-    return best if best_score >= 0.45 else None
+    return best if best_score >= 0.55 else None
 
 
-def _similarity(a: str, b: str) -> float:
-    if not a or not b:
-        return 0.0
-    if a == b:
-        return 1.0
-    if a in b or b in a:
-        return 0.8
-    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
-    common = sum(1 for ch in set(shorter) if ch in longer)
-    return common / max(len(set(longer)), 1)
+# Palavras que não dizem sobre o que o compromisso é — sobra delas é o assunto.
+_VAZIAS = {
+    "prova", "provinha", "provao", "exame", "avaliacao", "teste", "simulado",
+    "trabalho", "trampo", "entrega", "tarefa", "atividade", "tema", "dever",
+    "licao", "exercicio", "exercicios", "lista", "questoes", "seminario",
+    "apresentacao", "artigo", "fichamento", "resenha", "resumo", "redacao",
+    "projeto", "relatorio", "leitura", "aula", "revisao", "levar", "trazer",
+    "de", "da", "do", "das", "dos", "em", "no", "na", "sobre", "para", "pra",
+    "e", "o", "a", "os", "as", "um", "uma", "com", "grupo", "dupla", "final",
+    "parcial", "1", "2", "3", "i", "ii", "iii",
+}
+
+
+def _topic(title: str, subject_name: str = "") -> str:
+    """O assunto do compromisso: o que sobra depois de tirar o óbvio.
+
+    "Trabalho em grupo — habeas corpus" → "habeas corpus".
+    "Prova de Direito Civil" (em Direito Civil) → "" — genérico, porque não
+    diz sobre o que a prova é.
+    """
+    ignorar = set(_VAZIAS) | set(norm(subject_name).split())
+    palavras = [p for p in norm(title).replace("—", " ").split() if p not in ignorar]
+    return " ".join(palavras)
 
 
 def looks_like_reschedule(text: str) -> bool:

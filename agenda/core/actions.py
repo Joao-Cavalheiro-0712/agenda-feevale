@@ -21,6 +21,7 @@ from agenda.core.dates import (
     format_date_pt,
     resolve_expression,
 )
+from agenda.core.text import enumerate_pt, plural_pt
 from agenda.models import (
     AiAction,
     Event,
@@ -708,10 +709,12 @@ def _handle_read(db: Session, user: User, proposal: ActionProposal) -> ActionRes
             for card in day["items"]
         ]
         counts = summary["counts"]
-        message = (
-            f"Esta semana: {counts['aulas']} aulas, {counts['entregas']} entregas "
-            f"e {counts['provas']} provas."
-        )
+        partes = [
+            plural_pt(counts["aulas"], "aula"),
+            plural_pt(counts["entregas"], "entrega"),
+            plural_pt(counts["provas"], "prova"),
+        ]
+        message = f"Esta semana: {enumerate_pt(partes, conjuncao='e')}."
         if summary["heaviest_day"]:
             message += f" O dia mais pesado é {summary['heaviest_day']}."
         return ActionResult("ANSWERED", message=message, cards=cards[:20], view="week")

@@ -392,3 +392,125 @@ def test_nenhuma_resposta_e_um_nao_entendi_seco(db, user):
         assert mensagem.strip().lower() not in (
             "não entendi.", "não entendi", "não entendi. pode repetir?",
         ), f"resposta genérica para {frase!r}"
+
+
+# --------------------------------------------------------------------------- #
+# Remarcação: dois assuntos diferentes são dois eventos
+# --------------------------------------------------------------------------- #
+def test_dois_trabalhos_diferentes_na_mesma_materia_nao_viram_remarcacao(db, user):
+    """Regressão de atrito: um semestre tem vários trabalhos por matéria.
+
+    Perguntar "é essa que mudou de data?" em toda captura transformaria o
+    produto no oposto do que ele promete.
+    """
+    import datetime as dt
+
+    from agenda.core import events as events_core
+
+    contexto = academic.active_context(db, user.id)
+    penal = academic.upsert_subject(db, user.id, contexto.id, "Direito Penal")
+    events_core.create_event(
+        db, user, title="Trabalho em grupo — habeas corpus", event_type="ASSIGNMENT",
+        date=dt.date.today() + dt.timedelta(days=5), subject=penal,
+    )
+    db.commit()
+
+    resposta = assistant.handle_message(
+        db, user, "trampo de penal dia 25 sobre execucao penal"
+    )
+    assert resposta["status"] in ("EXECUTED", "NEEDS_CONFIRMATION"), resposta["message"]
+    assert "mudou de data" not in resposta["message"]
+
+
+def test_titulo_generico_ainda_pergunta_se_e_remarcacao(db, user):
+    """"Prova de Civil" contra "Prova de Civil" em outra data: aí sim é dúvida real."""
+    import datetime as dt
+
+    from agenda.core import duplicates, events as events_core
+
+    contexto = academic.active_context(db, user.id)
+    civil = academic.upsert_subject(db, user.id, contexto.id, "Direito Civil")
+    events_core.create_event(
+        db, user, title="Prova de Direito Civil", event_type="EXAM",
+        date=dt.date.today() + dt.timedelta(days=5), subject=civil,
+    )
+    db.commit()
+
+    candidato = duplicates.find_reschedule_candidate(
+        db, user.id, subject_id=civil.id, event_type="EXAM",
+        title="Prova de Direito Civil", new_date=dt.date.today() + dt.timedelta(days=12),
+    )
+    assert candidato is not None
+
+
+def test_remarcacao_explicita_continua_remarcando(db, user):
+    import datetime as dt
+
+    from agenda.core import events as events_core
+
+    contexto = academic.active_context(db, user.id)
+    civil = academic.upsert_subject(db, user.id, contexto.id, "Direito Civil")
+    evento = events_core.create_event(
+        db, user, title="Prova sobre contratos", event_type="EXAM",
+        date=dt.date.today() + dt.timedelta(days=5), subject=civil,
+    )
+    db.commit()
+
+    resposta = assistant.handle_message(
+        db, user, "a prova de contratos de civil passou para dia 28"
+    )
+    db.commit()
+    db.refresh(evento)
+    assert resposta["status"] in ("EXECUTED", "NEEDS_CONFIRMATION")
+
+
+def test_enumeracao_em_portugues():
+    """"A ou B ou C" soa a formulário; "A, B ou C" soa a alguém falando."""
+    from agenda.core.text import enumerate_pt
+
+    assert enumerate_pt(["Civil", "Penal", "Constitucional"]) == "Civil, Penal ou Constitucional"
+    assert enumerate_pt(["Cálculo I", "Cálculo II"]) == "Cálculo I ou Cálculo II"
+    assert enumerate_pt(["História"]) == "História"
+    assert enumerate_pt([]) == ""
+    assert enumerate_pt(["a", "b"], conjuncao="e") == "a e b"
+
+
+def test_pergunta_de_ambiguidade_com_tres_materias_le_bem(db, user):
+    contexto = academic.active_context(db, user.id)
+    for nome in ("Direito Civil", "Direito Penal", "Direito Constitucional"):
+        academic.upsert_subject(db, user.id, contexto.id, nome)
+    db.commit()
+
+    resposta = assistant.handle_message(db, user, "prova de direito dia 28")
+    assert " ou " in resposta["message"]
+    assert resposta["message"].count(" ou ") == 1, resposta["message"]
+    assert ", " in resposta["message"]
+
+
+def test_concordancia_de_plural():
+    from agenda.core.text import plural_pt
+
+    assert plural_pt(0, "prova") == "0 provas"
+    assert plural_pt(1, "prova") == "1 prova"
+    assert plural_pt(2, "prova") == "2 provas"
+    assert plural_pt(1, "mês", "meses") == "1 mês"
+    assert plural_pt(3, "mês", "meses") == "3 meses"
+
+
+def test_resumo_da_semana_concorda(db, user):
+    """"1 provas" é pequeno e faz o produto parecer inacabado."""
+    import datetime as dt
+
+    from agenda.core import events as events_core
+
+    contexto = academic.active_context(db, user.id)
+    materia = academic.upsert_subject(db, user.id, contexto.id, "Direito Civil")
+    events_core.create_event(
+        db, user, title="Prova sobre contratos", event_type="EXAM",
+        date=dt.date.today() + dt.timedelta(days=1), subject=materia,
+    )
+    db.commit()
+
+    resposta = assistant.handle_message(db, user, "o que eu tenho essa semana?")
+    assert "1 prova." in resposta["message"] or "1 prova " in resposta["message"]
+    assert "1 provas" not in resposta["message"]

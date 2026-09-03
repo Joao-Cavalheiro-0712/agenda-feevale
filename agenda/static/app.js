@@ -120,7 +120,12 @@
     if (status) status.textContent = "";
     if (!box) { toast(result.message || "Pronto."); return; }
 
-    box.innerHTML = "";
+    // Na folha de captura cada envio é independente, então a área é limpa.
+    // Na tela de conversa a área é o histórico — limpar apagaria a conversa
+    // inteira, inclusive a mensagem que a pessoa acabou de mandar.
+    const conversa = box.dataset.conversation === "on";
+    if (!conversa) box.innerHTML = "";
+
     if (result.transcript) {
       const heard = document.createElement("p");
       heard.className = "bubble heard";
@@ -133,6 +138,7 @@
     box.appendChild(message);
 
     (result.cards || []).forEach((card) => box.appendChild(cardNode(card)));
+    if (conversa) box.lastElementChild?.scrollIntoView({ block: "end" });
 
     if (result.status === "NEEDS_CONFIRMATION" && result.action_id) {
       const actions = document.createElement("div");
@@ -149,7 +155,12 @@
       no.className = "btn sm ghost"; no.type = "button"; no.textContent = "Cancelar";
       no.onclick = async () => {
         await api(`/api/actions/${result.action_id}/reject`, { method: "POST" });
-        box.innerHTML = "<p class='tiny muted'>Ok, não fiz nada.</p>";
+        actions.remove();
+        const nota = document.createElement("p");
+        nota.className = "tiny muted";
+        nota.textContent = "Ok, não fiz nada.";
+        if (conversa) box.appendChild(nota);
+        else box.replaceChildren(nota);
       };
       actions.append(yes, no);
       box.appendChild(actions);

@@ -168,26 +168,32 @@ def resolve_subject(
         return (iguais[0], []) if len(iguais) == 1 else (None, iguais)
 
     exact: list[Subject] = []
-    partial: list[Subject] = []
+    # Cada parcial guarda o tamanho do termo que casou: "processo civil" casando
+    # inteiro vale mais que o apelido "civil" de outra matéria. Sem isso, as
+    # duas ficam empatadas e o sistema pergunta o que já estava claro na frase.
+    partial: list[tuple[int, Subject]] = []
     for subject in subjects:
         names = {norm(subject.name), norm(subject.short_name)} - {""}
         names |= {a.alias_norm for a in subject.aliases}
         if target in names:
             exact.append(subject)
             continue
-        if any(n and _contem_palavra(target, n) for n in names):
-            partial.append(subject)
+        casados = [n for n in names if n and _contem_palavra(target, n)]
+        if casados:
+            partial.append((max(len(n) for n in casados), subject))
         elif _abbreviation_match(target, names):
-            partial.append(subject)
+            partial.append((0, subject))
 
     if len(exact) == 1:
         return exact[0], []
     if exact:
         return None, exact
-    if len(partial) == 1:
-        return partial[0], []
     if partial:
-        return None, partial
+        maior = max(peso for peso, _ in partial)
+        melhores = [s for peso, s in partial if peso == maior]
+        if len(melhores) == 1:
+            return melhores[0], []
+        return None, melhores
 
     if not approximate:
         return None, []

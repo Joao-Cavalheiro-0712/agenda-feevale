@@ -29,3 +29,27 @@ def fold(s: str) -> str:
     mantendo a acentuação para o usuário.
     """
     return strip_accents(s or "").lower()
+
+
+def enumerate_pt(itens: list[str], *, conjuncao: str = "ou") -> str:
+    """Lista no jeito que se lê em voz alta: "A, B ou C".
+
+    Existe porque `" ou ".join(...)` produz "A ou B ou C", que soa a formulário
+    e não a alguém falando com você.
+    """
+    itens = [i for i in itens if i]
+    if not itens:
+        return ""
+    if len(itens) == 1:
+        return itens[0]
+    return f"{', '.join(itens[:-1])} {conjuncao} {itens[-1]}"
+
+
+def plural_pt(quantidade: int, singular: str, plural: str = "") -> str:
+    """"1 prova", "2 provas", "0 provas" — com o número na frente.
+
+    Concordância errada ("1 provas") é pequena e é exatamente o tipo de coisa
+    que faz um produto parecer inacabado.
+    """
+    palavra = singular if abs(quantidade) == 1 else (plural or f"{singular}s")
+    return f"{quantidade} {palavra}"
