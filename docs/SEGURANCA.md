@@ -305,3 +305,36 @@ Configuração — sem chave, o botão não aparece:
 
 O `redirect_uri` registrado no provedor precisa ser
 `https://<domínio>/entrar/<google|apple>/retorno`.
+
+## Entrar com biometria (passkeys)
+
+A biometria **nunca** chega ao servidor. Ela destrava o aparelho; o aparelho
+assina um desafio com uma chave privada que vive no Secure Enclave / TPM e não
+é exportável. Guardamos só a chave pública, que sozinha não abre nada — um dump
+da tabela `passkeys` não dá acesso a conta nenhuma. É o oposto de uma senha,
+cujo hash guardado é sempre material de ataque offline.
+
+Passkey resiste a phishing por construção: a assinatura é amarrada ao `rp_id` e
+à origem, então um site clonado em `gr1fo.app` não produz assinatura que a gente
+aceite — mesmo que a pessoa caia no golpe. Há teste com um autenticador de
+software (chave EC de verdade, assinatura de verdade) afirmando exatamente isso.
+
+Três verificações que nenhum refactor pode remover:
+
+1. **Desafio de uso único**, guardado do lado do servidor. Sem isso, uma
+   assinatura capturada uma vez valeria para sempre.
+2. **`userVerification: required`** — garante que houve biometria ou PIN, e não
+   só um aparelho destravado em cima da mesa.
+3. **Contador do autenticador.** Se `sign_count` volta para trás, a credencial
+   pode ter sido clonada: recusamos e registramos. Autenticadores com
+   sincronização em nuvem (iCloud Keychain) mandam 0 sempre — aí o contador não
+   diz nada, e a regra só vale quando ele existe.
+
+As opções de login vão com a lista de credenciais **vazia** de propósito:
+devolver as credenciais de um e-mail transformaria a tela de login num
+verificador de quem tem conta aqui.
+
+| Variável | O que faz |
+|---|---|
+| `WEBAUTHN_RP_ID` | Domínio registrável, sem esquema e sem porta. Vazio = deriva de `PUBLIC_URL` |
+| `WEBAUTHN_ORIGIN` | Origens aceitas, separadas por vírgula. Vazio = `PUBLIC_URL` |

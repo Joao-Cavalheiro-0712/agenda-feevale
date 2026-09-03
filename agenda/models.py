@@ -18,6 +18,7 @@ from sqlalchemy import (
     Index,
     Integer,
     JSON,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -234,6 +235,33 @@ class LinkToken(Base):
 # --------------------------------------------------------------------------- #
 # Contexto acadêmico
 # --------------------------------------------------------------------------- #
+class Passkey(Base):
+    """Uma chave de acesso (Face ID, Touch ID, Windows Hello, chave física).
+
+    O que fica guardado aqui é a **chave pública** — ela não abre nada sozinha.
+    A privada nunca sai do aparelho (fica no Secure Enclave / TPM), e a
+    biometria nem chega perto do servidor: ela só destrava o aparelho, que
+    então assina o desafio. É por isso que passkey resiste a phishing: a
+    assinatura é amarrada ao domínio, então um site clonado não consegue
+    produzir uma assinatura que a gente aceite.
+    """
+
+    __tablename__ = "passkeys"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    credential_id: Mapped[str] = mapped_column(String(500), unique=True, index=True)
+    public_key: Mapped[bytes] = mapped_column(LargeBinary)
+    # Contador do autenticador. Se ele voltar para trás, a credencial pode ter
+    # sido clonada — ver `core.passkeys.autenticar`.
+    sign_count: Mapped[int] = mapped_column(Integer, default=0)
+    label: Mapped[str] = mapped_column(String(80), default="")
+    transports: Mapped[str] = mapped_column(String(120), default="")
+    backed_up: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_used_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class EducationContext(Base):
     """Um contexto de estudos do usuário — ele pode ter vários ao mesmo tempo
     (graduação + curso de inglês, médio + técnico)."""

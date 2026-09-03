@@ -17,6 +17,7 @@ from agenda import config
 from agenda.core import (
     login_guard,
     oidc,
+    passkeys,
     phone as phone_utils,
     privacy,
     sessions,
@@ -557,3 +558,90 @@ def oidc_finish():
         return redirect(url_for("pages.onboarding"))
 
     return render_template("auth/social.html", pendente=pendente)
+
+
+# --------------------------------------------------------------------------- #
+# Entrar com biometria (passkeys)
+# --------------------------------------------------------------------------- #
+DESAFIO_NA_SESSAO = "passkey_desafio"
+
+
+@bp.post("/api/passkey/cadastro/opcoes")
+@limited("passkey")
+@login_required
+def passkey_register_options():
+    try:
+        opcoes, desafio = passkeys.opcoes_de_cadastro(db(), current_user())
+    except passkeys.PasskeyError as erro:
+        return {"ok": False, "erro": str(erro)}, 400
+    session[DESAFIO_NA_SESSAO] = desafio
+    return {"ok": True, "options": opcoes}
+
+
+@bp.post("/api/passkey/cadastro")
+@limited("passkey")
+@login_required
+def passkey_register():
+    desafio = session.pop(DESAFIO_NA_SESSAO, "")
+    if not desafio:
+        return {"ok": False, "erro": "Desafio expirado. Tente de novo."}, 400
+    corpo = request.get_json(silent=True) or {}
+    try:
+        chave = passkeys.concluir_cadastro(
+            db(), current_user(),
+            credencial=corpo.get("credential") or {},
+            desafio=desafio,
+            rotulo=(corpo.get("label") or "")[:80],
+        )
+    except passkeys.PasskeyError as erro:
+        print(f"[passkey] {erro}")
+        return {"ok": False, "erro": "Não consegui cadastrar essa chave."}, 400
+    db().commit()
+    return {"ok": True, "id": chave.id, "label": chave.label}
+
+
+@bp.post("/api/passkey/login/opcoes")
+@limited("passkey")
+def passkey_login_options():
+    """Login descoberto: a lista de credenciais vai vazia de propósito.
+
+    Devolver as credenciais de um e-mail transformaria esta rota num
+    verificador de quem tem conta aqui.
+    """
+    opcoes, desafio = passkeys.opcoes_de_login(db())
+    session[DESAFIO_NA_SESSAO] = desafio
+    return {"ok": True, "options": opcoes}
+
+
+@bp.post("/api/passkey/login")
+@limited("passkey")
+def passkey_login():
+    desafio = session.pop(DESAFIO_NA_SESSAO, "")
+    if not desafio:
+        return {"ok": False, "erro": "Desafio expirado. Tente de novo."}, 400
+    corpo = request.get_json(silent=True) or {}
+    try:
+        user = passkeys.autenticar(
+            db(), credencial=corpo.get("credential") or {}, desafio=desafio
+        )
+    except passkeys.PasskeyError as erro:
+        # Detalhe no log; na tela, uma frase só. Distinguir "credencial
+        # desconhecida" de "assinatura inválida" entregaria quem tem conta aqui.
+        print(f"[passkey] {erro}")
+        return {"ok": False, "erro": "Não consegui entrar com essa chave."}, 400
+    db().commit()
+    login_user(user)
+    destino = _safe_next(corpo.get("next"))
+    return {"ok": True, "redirect": destino if user.onboarding_done
+            else url_for("pages.onboarding")}
+
+
+@bp.post("/conta/passkey/<passkey_id>/remover")
+@limited("passkey")
+@login_required
+def passkey_remove(passkey_id: str):
+    if passkeys.remover(db(), current_user(), passkey_id):
+        flash("Chave removida.", "success")
+    else:
+        flash("Essa chave não é sua ou já não existe.", "error")
+    return redirect(url_for("pages.security_page"))

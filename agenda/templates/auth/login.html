@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% from 'partials/icons.html' import mark %}
 {% block title %}Entrar · {{ APP_NAME }}{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='passkey.js') }}" nonce="{{ nonce }}" defer></script>{% endblock %}
 {% block topbar %}
 <header class="topbar"><div class="wrap"><a class="wordmark" href="{{ url_for('pages.home') }}">{{ mark() }}{{ APP_NAME }}</a></div></header>
 {% endblock %}
@@ -15,6 +16,10 @@
   <label class="field"><span>Senha</span><input type="password" name="password" required autocomplete="current-password"></label>
   <button class="btn block" type="submit">Entrar</button>
 </form>
+<div class="social-login" data-passkey>
+  <div class="ou"><span>ou</span></div>
+  <button type="button" class="btn ghost block" data-passkey="entrar">Entrar com Face ID ou digital</button>
+</div>
 {% include 'partials/social_buttons.html' %}
 <p class="tiny muted" style="margin-top:var(--s5)"><a href="{{ url_for('auth.recover') }}" class="link">Esqueci minha senha</a></p>
 <p class="tiny muted" style="margin-top:var(--s3)">Ainda não tem conta? <a href="{{ url_for('auth.register') }}" class="link">Criar agora</a></p>

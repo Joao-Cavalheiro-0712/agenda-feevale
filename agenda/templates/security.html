@@ -43,6 +43,36 @@
   {% endif %}
 </section>
 
+<section class="section" data-passkey>
+  <header><h3>Entrar sem senha</h3><span class="count num">{{ passkeys|length }}</span></header>
+  {% for chave in passkeys %}
+    <div class="item">
+      <div class="body">
+        <span class="title">{{ chave.label }}</span>
+        <div class="meta tiny">
+          Cadastrada em {{ chave.created_at.strftime('%d/%m/%Y') }}
+          {% if chave.last_used_at %}· usada em {{ chave.last_used_at.strftime('%d/%m/%Y') }}{% endif %}
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('auth.passkey_remove', passkey_id=chave.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn ghost tiny" type="submit">Remover</button>
+      </form>
+    </div>
+  {% else %}
+    <p class="tiny muted">Nenhuma chave ainda.</p>
+  {% endfor %}
+  <div class="card" style="margin-top:var(--s4)">
+    <p class="tiny">
+      Com uma chave de acesso você entra com o rosto ou a digital. Sua biometria
+      não sai do aparelho e nunca chega até nós — o celular só assina uma prova
+      de que é você. É mais seguro que senha: um site clonado não consegue
+      falsificar essa assinatura.
+    </p>
+    <button class="btn block" type="button" data-passkey="cadastrar">Cadastrar este aparelho</button>
+  </div>
+</section>
+
 <section class="section">
   <header><h3>Contatos confirmados</h3></header>
   <div class="card">
@@ -121,3 +151,4 @@
   </form>
 </section>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='passkey.js') }}" nonce="{{ nonce }}" defer></script>{% endblock %}

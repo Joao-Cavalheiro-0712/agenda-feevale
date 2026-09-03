@@ -30,6 +30,7 @@ from agenda.core import (
     family,
     grades,
     notifications,
+    passkeys as passkeys_core,
     periods,
     planner,
     privacy,
@@ -842,6 +843,7 @@ def security_page():
             for row in ativos
         ],
         email=user.email,
+        passkeys=passkeys_core.listar(db(), user),
         email_verificado=verification.email_verificado(user),
         telefone=user.phone_e164,
         telefone_verificado=verification.telefone_verificado(user),

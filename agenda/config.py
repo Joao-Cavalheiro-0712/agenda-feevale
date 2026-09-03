@@ -160,6 +160,7 @@ RATE_LIMITS = {
     # Login social é mais caro (round-trip ao provedor) e mais atrativo para
     # varredura, mas a família inteira pode entrar do mesmo IP.
     "oidc": (int(_env("RATE_LIMIT_OIDC", "20")), 300),
+    "passkey": (int(_env("RATE_LIMIT_PASSKEY", "20")), 300),
     "register": (int(_env("RATE_LIMIT_REGISTER", "40")), 600),
     "share": (int(_env("RATE_LIMIT_SHARE", "20")), 60),
     "export": (int(_env("RATE_LIMIT_EXPORT", "10")), 60),
@@ -206,6 +207,15 @@ REFUND_WINDOW_DAYS = int(_env("REFUND_WINDOW_DAYS", "7"))
 # --------------------------------------------------------------------------- #
 # Privacidade e contato do titular (LGPD art. 41)
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Passkeys (Face ID, Touch ID, Windows Hello)
+# --------------------------------------------------------------------------- #
+# O domínio ao qual a credencial fica amarrada — registrável, sem esquema e sem
+# porta. Errar isto é o motivo número um de "funciona local e quebra em prod".
+WEBAUTHN_RP_ID = _env("WEBAUTHN_RP_ID", "")
+# Origens aceitas, separadas por vírgula. Vazio = deriva de PUBLIC_URL.
+WEBAUTHN_ORIGIN = _env("WEBAUTHN_ORIGIN", "")
+
 # --------------------------------------------------------------------------- #
 # Entrar com Google e com Apple (OIDC)
 # --------------------------------------------------------------------------- #
