@@ -133,12 +133,11 @@ def onboarding():
             education_type = EducationType.OTHER.value
         perfil = profiles.profile_for(education_type)
 
-        # Segunda linha de defesa contra idade declarada falsamente. Uma conta
-        # adulta escolhendo um nível que só existe para criança é ou uma
-        # criança que mentiu o ano, ou um pai montando a agenda do filho no
-        # lugar errado. Nos dois casos o destino certo é a conta do estudante
-        # criada pelo responsável. Não acusamos ninguém: perguntamos de quem é
-        # a agenda, porque adulto em EJA existe e não pode ser barrado.
+        # Uma conta adulta escolhendo um nível de criança tem três explicações,
+        # e a mais comum no Brasil não é a fraude: é adulto no EJA. Depois vem
+        # o pai montando a agenda do filho na conta errada e, só então, a
+        # criança que informou um ano falso. Perguntar custa um toque e acerta
+        # os três; bloquear erraria justamente com quem voltou a estudar.
         if (
             profiles.is_child_only_profile(education_type)
             and not user.is_minor
@@ -148,6 +147,7 @@ def onboarding():
                 "legal/de_quem_e_a_agenda.html",
                 nivel=education_type,
                 nivel_label=perfil.label,
+                eja_label=profiles.PROFILES[EducationType.EJA.value].label,
                 dados=request.form,
             ), 200
 
@@ -185,8 +185,10 @@ def onboarding():
         academic.set_active_context(db(), user.id, context.id)
         periods.ensure_periods(db(), context)
         user.onboarding_done = True
-        # Perfis tipicamente de crianças começam sem automação silenciosa (SPEC §80).
-        if profiles.is_minor_profile(education_type):
+        # Automação silenciosa desligada por padrão para menores (SPEC §80). O
+        # critério é a pessoa, não o nível: um adulto no EJA ou no fundamental
+        # é um adulto, e não perde recurso por causa da série em que está.
+        if user.is_minor:
             user.auto_create_enabled = False
         db().flush()
         flash("Tudo certo. Agora me conta o que você precisa lembrar.", "success")

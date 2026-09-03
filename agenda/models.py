@@ -45,6 +45,7 @@ class EducationType(str, enum.Enum):
     ELEMENTARY = "ELEMENTARY"             # fundamental — anos iniciais (1º ao 5º)
     MIDDLE_SCHOOL = "MIDDLE_SCHOOL"       # fundamental — anos finais (6º ao 9º)
     HIGH_SCHOOL = "HIGH_SCHOOL"           # ensino médio
+    EJA = "EJA"                           # EJA / supletivo — adultos no básico
     TECHNICAL = "TECHNICAL"               # técnico / profissionalizante
     PREP_COURSE = "PREP_COURSE"           # cursinho pré-vestibular ou concurso
     UNDERGRAD = "UNDERGRAD"               # graduação

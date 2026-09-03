@@ -164,17 +164,20 @@ def test_onboarding_de_cada_nivel_grava_o_periodo_certo(client, db, user):
     assert len(periods.list_periods(db, user.id, context_id=contexto.id)) == 3
 
 
-def test_onboarding_de_crianca_desliga_automacao(client, db, user):
+def test_automacao_desligada_segue_a_pessoa_e_nao_a_serie(client, db, user):
+    """Adulto em nível de criança (EJA, supletivo) não perde recurso por isso.
+
+    Quem começa sem automação silenciosa é a conta de menor — criada pelo
+    responsável, que já nasce com ela desligada (ver test_privacidade.py).
+    """
     with client.session_transaction() as session:
         token = session.get("csrf")
     dados = {
         "csrf_token": token, "type": "ELEMENTARY", "institution": "Escola",
         "grade_name": "5º ano", "period_kind": "BIMESTER",
     }
-    # Conta adulta escolhendo nível infantil primeiro responde de quem é a
-    # agenda (ver test_privacidade.py); aqui interessa o efeito depois disso.
+    # Conta adulta em nível infantil primeiro responde quem vai usar a agenda.
     assert client.post("/onboarding", data=dados).status_code == 200
-    resposta = client.post("/onboarding", data={**dados, "confirmo_adulto": "1"})
-    assert resposta.status_code == 302
+    assert client.post("/onboarding", data={**dados, "confirmo_adulto": "1"}).status_code == 302
     db.expire_all()
-    assert db.get(type(user), user.id).auto_create_enabled is False
+    assert db.get(type(user), user.id).auto_create_enabled is True

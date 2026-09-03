@@ -312,7 +312,7 @@ def test_maioridade(ano, esperado):
 # Segunda linha: idade declarada que não bate com o nível escolhido
 # --------------------------------------------------------------------------- #
 def test_conta_adulta_em_nivel_infantil_pergunta_de_quem_e_a_agenda(app, db):
-    """Criança que mentiu o ano cai aqui — e o pai que usou a conta errada também."""
+    """Três públicos caem aqui: adulto no EJA, pai na conta errada, criança que mentiu."""
     client = app.test_client()
     client.get("/criar-conta")
     client.post("/criar-conta", data={
@@ -325,10 +325,39 @@ def test_conta_adulta_em_nivel_infantil_pergunta_de_quem_e_a_agenda(app, db):
     })
     assert resposta.status_code == 200
     corpo = resposta.get_data(as_text=True)
-    assert "De quem é essa" in corpo
+    assert "Quem vai usar essa" in corpo
+    assert "EJA" in corpo  # o adulto que voltou a estudar tem saída própria
     # Nada foi criado ainda: o onboarding não passou.
     pessoa = db.query(User).filter_by(email="t@example.com").first()
     assert pessoa.onboarding_done is False
+
+
+def test_adulto_escolhe_eja_e_ganha_perfil_de_adulto(app, db):
+    """Quem voltou a estudar não recebe a tela de uma criança de 8 anos."""
+    from agenda.core import academic
+
+    client = app.test_client()
+    client.get("/criar-conta")
+    client.post("/criar-conta", data={
+        "csrf_token": _csrf(client), "name": "Seu Antônio", "email": "antonio@example.com",
+        "password": "senhaforte123", "birth_year": "1968", "accept_terms": "on",
+    })
+    client.post("/onboarding", data={
+        "csrf_token": _csrf(client), "type": "ELEMENTARY", "institution": "EMEF Noturno",
+    })
+    resposta = client.post("/onboarding", data={
+        "csrf_token": _csrf(client), "type": "EJA", "institution": "EMEF Noturno",
+        "confirmo_adulto": "1",
+    })
+    assert resposta.status_code == 302
+
+    db.expire_all()
+    pessoa = db.query(User).filter_by(email="antonio@example.com").first()
+    contexto = academic.list_contexts(db, pessoa.id)[0]
+    assert contexto.type == "EJA"
+    # Adulto é adulto: nada de automação desligada por causa da série.
+    assert pessoa.auto_create_enabled is True
+    assert pessoa.is_minor is False
 
 
 def test_adulto_em_eja_segue_confirmando(app, db):

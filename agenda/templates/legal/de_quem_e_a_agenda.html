@@ -1,24 +1,33 @@
 {% extends 'base.html' %}
 {% from 'partials/icons.html' import mark %}
-{% block title %}De quem é essa agenda? · {{ APP_NAME }}{% endblock %}
+{% block title %}Quem vai usar · {{ APP_NAME }}{% endblock %}
 {% block topbar %}
 <header class="topbar"><div class="wrap"><span class="wordmark">{{ mark() }}{{ APP_NAME }}</span></div></header>
 {% endblock %}
 {% block content %}
 <div class="pagehead" style="padding-top:var(--s6)">
-  <p class="label kicker">Só para acertar o caminho</p>
-  <h2 class="h-page">De quem é essa <span class="grifo-sob">agenda</span>?</h2>
+  <p class="label kicker">Só para eu acertar a tela</p>
+  <h2 class="h-page">Quem vai usar essa <span class="grifo-sob">agenda</span>?</h2>
   <p class="sub">
-    Você escolheu <strong>{{ nivel_label }}</strong>. Se a agenda é de uma criança,
-    a conta precisa ser dela — criada por você, com a sua autorização. É o que a lei pede,
-    e também é melhor assim: ela usa no celular dela, você acompanha do seu.
+    Você escolheu <strong>{{ nivel_label }}</strong>. Esse nível tem dois públicos bem
+    diferentes, e a tela muda bastante entre eles. Um toque e eu acerto.
   </p>
 </div>
 
-<div class="stack g4" style="max-width:420px">
-  <a class="btn marca block" href="{{ url_for('pages.family_new_student') }}">
-    É de um filho ou de uma criança
-  </a>
+<div class="stack g4" style="max-width:440px">
+  <form method="post" action="{{ url_for('pages.onboarding') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="confirmo_adulto" value="1">
+    <input type="hidden" name="type" value="EJA">
+    {% for campo, valor in dados.items() %}
+      {% if campo not in ('csrf_token', 'type') %}<input type="hidden" name="{{ campo }}" value="{{ valor }}">{% endif %}
+    {% endfor %}
+    <button class="capture-option" type="submit" style="width:100%;text-align:left">
+      <span class="ico"><span class="num" style="font-weight:700;font-size:.76rem;color:var(--ink-4)">01</span></span>
+      <span><strong>Sou eu, no {{ eja_label }}</strong>
+        <small>Voltei a estudar. Quero a agenda com cara de adulto</small></span>
+    </button>
+  </form>
 
   <form method="post" action="{{ url_for('pages.onboarding') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -26,15 +35,22 @@
     {% for campo, valor in dados.items() %}
       {% if campo != 'csrf_token' %}<input type="hidden" name="{{ campo }}" value="{{ valor }}">{% endif %}
     {% endfor %}
-    <button class="btn ghost block" type="submit">
-      Sou eu que estudo neste nível, e tenho 18 anos ou mais
+    <button class="capture-option" type="submit" style="width:100%;text-align:left">
+      <span class="ico"><span class="num" style="font-weight:700;font-size:.76rem;color:var(--ink-4)">02</span></span>
+      <span><strong>Sou eu mesmo, e é esse nível mesmo</strong>
+        <small>Segue com {{ nivel_label }}, do jeito que eu escolhi</small></span>
     </button>
   </form>
+
+  <a class="capture-option" href="{{ url_for('pages.family_new_student') }}" style="text-align:left">
+    <span class="ico"><span class="num" style="font-weight:700;font-size:.76rem;color:var(--ink-4)">03</span></span>
+    <span><strong>É de um filho ou de uma criança</strong>
+      <small>Crio a conta dela, ela usa no celular dela e você acompanha</small></span>
+  </a>
 </div>
 
 <p class="tiny muted" style="margin-top:var(--s5);max-width:46ch">
-  Adulto que voltou a estudar (EJA, supletivo) segue pelo segundo botão sem problema nenhum.
-  Se alguém criou uma conta aqui informando uma idade que não é a dele, escreva para
-  {{ privacy_email }}: a gente bloqueia a conta e devolve o controle a quem é responsável.
+  Nenhuma dessas opções tira recurso de ninguém — a única diferença é o vocabulário
+  da tela e quem é o dono da conta.
 </p>
 {% endblock %}

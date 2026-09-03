@@ -45,7 +45,7 @@ escopo (P1/P2/P3 ou dependente de contrato externo).
 | § | Item | Estado | Onde |
 |---|---|---|---|
 | 61–63 | Stack e serviços lógicos | ◑ | monólito Python organizado nas mesmas fronteiras (`core`, `ai`, `ingest`, `channels`, `jobs`, `web`) para extração futura |
-| 64–65 | Níveis de ensino e períodos | ✅ | 13 níveis em `EducationType`, 7 divisões de ano em `PeriodKind`, `core/periods.py` e `core/profiles.py` |
+| 64–65 | Níveis de ensino e períodos | ✅ | 14 níveis em `EducationType` (inclusive EJA), 7 divisões de ano em `PeriodKind`, `core/periods.py` e `core/profiles.py` |
 | 64–65 | Entidades e educação flexível | ✅ | `models.py` |
 | 66 | Endpoints | ✅ | `web/api.py`, `web/pages.py`, `web/webhooks.py` |
 | 67–68 | Webhook e mídia | ✅ | assinatura HMAC, idempotência, 200 rápido, processamento fora do request |
@@ -76,6 +76,7 @@ escopo (P1/P2/P3 ou dependente de contrato externo).
 | 121 | Escopo P1 | ✅ | WhatsApp, PWA, LGPD, Web Push, analytics interno e planos com quotas |
 | 122 | Escopo P2 | ◑ | família, notas e pesos, checklists, planejador de estudo e exportação de calendário entregues; sincronização bidirecional e apps nativos continuam fora |
 | 123 | P3 / B2B | ⏳ | plano institucional existe como entitlement; painel da instituição e SSO ficam para depois |
+| — | EJA / supletivo | ✅ | nível de primeira classe, com vocabulário e tom de adulto: quem voltou a estudar no básico não recebe a tela de uma criança |
 | 137 | Notas e pesos | ✅ | `core/grades.py` com média ponderada e quanto falta para passar |
 | 139–140 | Materiais e checklists | ✅ | checklist no evento, com extração automática de "levar cartolina e cola" |
 | 141 | Tempo real | ✅ | SSE em `web/realtime.py`: o que chega pelo WhatsApp aparece na aba aberta |

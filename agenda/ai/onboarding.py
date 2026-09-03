@@ -161,7 +161,8 @@ def apply(db: Session, user: User, dados: dict) -> dict:
             horarios += 1
 
     user.onboarding_done = True
-    if profiles.is_minor_profile(tipo):
+    # Critério é a pessoa, não a série: adulto no EJA mantém a automação.
+    if user.is_minor:
         user.auto_create_enabled = False
     db.flush()
     return {"context": context, "subjects": criadas, "schedules": horarios}

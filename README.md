@@ -124,6 +124,7 @@ do cadastro, ordem da tela inicial, lembretes padrão e recursos ligados.
 | Fundamental I | tema de casa, material | bimestre | o que levar |
 | Fundamental II | tarefa, trabalho | bimestre | hoje |
 | Ensino médio | lista de exercícios, redação, simulado | trimestre | hoje |
+| EJA / supletivo | atividade, trabalho, prova | semestre | hoje |
 | Cursinho | simulado, revisão | contínuo | hoje |
 | Técnico | prática de laboratório, entrega técnica | trimestre / módulo | hoje |
 | Graduação | trabalho, artigo, seminário | semestre | hoje |

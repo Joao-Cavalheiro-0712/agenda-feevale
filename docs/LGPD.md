@@ -34,7 +34,8 @@ O caminho do menor:
 
 Padrões mais protetivos para menores, ligados automaticamente:
 
-* automação silenciosa desligada (`auto_create_enabled = False`);
+* automação silenciosa desligada (`auto_create_enabled = False`) — o critério é
+  **a pessoa, não a série**: adulto no EJA ou no fundamental mantém tudo;
 * interpretação automática **desligada por padrão** — o responsável precisa marcar;
 * sem publicidade e sem perfilamento comportamental (não existem no produto);
 * o responsável pode revisar, corrigir e pedir exclusão a qualquer momento.
@@ -49,13 +50,20 @@ conhecimento. São três camadas:
 
 1. **Pergunta direta no cadastro.** Idade declarada abaixo de 18 → conta não é
    criada, e a tela explica o caminho do responsável.
-2. **Conferência cruzada no onboarding.** Uma conta que se declarou adulta e
-   escolhe educação infantil, anos iniciais ou anos finais do fundamental é
-   interrompida com *"de quem é essa agenda?"*, com um botão que leva direto à
-   criação da conta pelo responsável. Ensino médio e técnico **não** disparam a
-   pergunta: aos 18 é comum e legítimo estar neles (EJA, repetência, quem voltou
-   a estudar), e barrar isso seria falso positivo. Enquanto a pergunta não for
-   respondida, o onboarding não conclui.
+2. **Conferência cruzada no onboarding — uma pergunta, não um bloqueio.** Uma
+   conta que se declarou adulta e escolhe educação infantil ou fundamental
+   responde *"quem vai usar essa agenda?"*, com três saídas de mesmo peso:
+   **EJA/supletivo** (adulto que voltou a estudar — ganha o perfil adulto),
+   **sou eu mesmo neste nível** (segue como escolheu) e **é de uma criança**
+   (leva à conta criada pelo responsável). Nenhuma delas tira recurso de
+   ninguém. Ensino médio e técnico não disparam a pergunta: aos 18 é comum e
+   legítimo estar neles.
+
+   No Brasil, adulto no ensino básico não é exceção — é uma modalidade inteira,
+   com gente que trabalha o dia todo e estuda à noite. Um bloqueio aqui erraria
+   justamente com quem voltou a estudar, que é a última pessoa que este produto
+   pode empurrar para fora. Por isso `EJA` é um nível de primeira classe, com
+   vocabulário e tom de adulto, e não um caso especial do perfil infantil.
 3. **Remediação quando alguém avisa.** O canal de privacidade recebe o aviso e a
    operação marca a conta no painel (`/admin`): ela é pausada na hora pela trava
    de consentimento, as sessões são encerradas, automação e IA são desligadas, e

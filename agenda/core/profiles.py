@@ -179,6 +179,45 @@ PROFILES: dict[str, EducationProfile] = {
         tone="jovem",
         min_age_hint=14,
     ),
+    # EJA / supletivo. No Brasil, adulto no ensino básico não é exceção: é uma
+    # modalidade inteira, com gente que trabalha o dia todo e estuda à noite.
+    # Dar a essa pessoa a tela de uma criança de 8 anos — "tema de casa",
+    # "levar cartolina" — é errado de produto antes de ser errado de tom. Este
+    # perfil existe para que ela não precise passar pelo perfil infantil.
+    EducationType.EJA.value: EducationProfile(
+        key=EducationType.EJA.value,
+        label="EJA / supletivo",
+        short="EJA",
+        institution_label="Escola ou polo",
+        subject_label="Matéria",
+        subject_label_plural="Matérias",
+        grade_field="grade_name",
+        grade_label="Etapa",
+        default_period_kind=PeriodKind.SEMESTER.value,
+        period_options=(
+            PeriodKind.SEMESTER.value, PeriodKind.TRIMESTER.value,
+            PeriodKind.MODULE.value, PeriodKind.ANNUAL.value,
+        ),
+        onboarding_fields=("institution", "grade_name", "shift"),
+        event_types=("EXAM", "ASSIGNMENT", "HOMEWORK", "PAPER", "PRESENTATION", "READING", "REMINDER"),
+        type_labels=_labels(
+            ASSIGNMENT="Trabalho", HOMEWORK="Atividade", EXAM="Prova",
+            PAPER="Redação", READING="Leitura",
+        ),
+        default_type="ASSIGNMENT",
+        reminder_offsets=(7, 2, 1),
+        home_blocks=("hoje", "entregas", "provas", "proximos", "semana"),
+        features=frozenset({FEATURE_GRADES, FEATURE_HOMEWORK, FEATURE_TIMELINE}),
+        capture_examples=(
+            "prova de português na quinta à noite",
+            "trabalho de história para entregar dia 20",
+            "atividade de matemática para semana que vem",
+        ),
+        tone="academico",
+        # 18: é conta de adulto para todos os efeitos — nada de tratamento de
+        # menor, nada de automação desligada por padrão.
+        min_age_hint=18,
+    ),
     EducationType.PREP_COURSE.value: EducationProfile(
         key=EducationType.PREP_COURSE.value,
         label="Cursinho / preparatório",
@@ -433,6 +472,7 @@ ONBOARDING_ORDER = (
     EducationType.ELEMENTARY.value,
     EducationType.MIDDLE_SCHOOL.value,
     EducationType.HIGH_SCHOOL.value,
+    EducationType.EJA.value,
     EducationType.PREP_COURSE.value,
     EducationType.TECHNICAL.value,
     EducationType.UNDERGRAD.value,
