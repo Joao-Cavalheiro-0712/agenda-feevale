@@ -127,10 +127,19 @@
 </section>
 
 <section class="section">
+  <header><h3>Aprender a usar</h3></header>
+  <p class="tiny muted" style="margin:0 0 var(--s4)">A apresentação de boas-vindas, quando você quiser.</p>
+  <form method="post" action="{{ url_for('pages.tour_replay') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn ghost block" type="submit">Ver a apresentação de novo</button>
+  </form>
+</section>
+
+<section class="section">
   <header><h3>Seus dados</h3></header>
   <p class="tiny muted" style="margin:0 0 var(--s4)">São seus. Leve embora ou apague quando quiser.</p>
   <div class="stack g4">
-    <a class="btn ghost block" href="{{ url_for('api.export_data') }}" download>Exportar tudo (JSON)</a>
+    <a class="btn ghost block" href="{{ url_for('pages.export_my_data') }}" download>Baixar tudo o que é meu (JSON)</a>
     <a class="btn ghost block" href="{{ url_for('pages.privacy_center') }}">Privacidade e consentimentos</a>
     <a class="btn ghost block" href="{{ url_for('pages.security_page') }}">Segurança e dispositivos</a>
     <form method="post" action="{{ url_for('auth.logout') }}">

@@ -132,7 +132,9 @@ def roteiro(perfil, *, nome: str = "") -> list[Cena]:
 # ser curto, e cada cena a mais é uma pessoa a menos chegando no fim.
 def cenas_extras(perfil) -> list[Cena]:
     extras: list[Cena] = []
-    if "FEATURE_GUARDIAN" in getattr(perfil, "features", frozenset()):
+    from agenda.core.profiles import FEATURE_GUARDIAN
+
+    if FEATURE_GUARDIAN in getattr(perfil, "features", frozenset()):
         extras.append(Cena(
             chave="familia",
             kicker="Para a família",

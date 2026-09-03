@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% block title %}Bem-vindo · {{ APP_NAME }}{% endblock %}
+{% block topbar %}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='tour.css') }}">{% endblock %}
+{% block content %}
+<div class="tour" id="tour" role="dialog" aria-modal="true" aria-label="Apresentação do {{ APP_NAME }}">
+
+  <div class="tour-progresso" aria-hidden="true">
+    {% for cena in cenas %}<span data-passo="{{ loop.index0 }}"></span>{% endfor %}
+  </div>
+
+  <div class="tour-palco">
+    {% for cena in cenas %}
+    <section class="tour-cena{% if loop.first %} ativa{% endif %}"
+             data-cena="{{ loop.index0 }}"
+             {% if not loop.first %}aria-hidden="true"{% endif %}>
+      <div class="tour-arte">{% include 'partials/tour_arte.html' %}</div>
+      <div class="tour-texto">
+        <p class="tour-kicker">{{ cena.kicker }}</p>
+        <h2 class="tour-titulo">{{ cena.titulo }}</h2>
+        {% if cena.antes or cena.depois %}
+          <div class="tour-antesdepois">
+            {% if cena.antes %}<p class="antes">{{ cena.antes }}</p>{% endif %}
+            {% if cena.depois %}<p class="depois">{{ cena.depois }}</p>{% endif %}
+          </div>
+        {% endif %}
+        <p class="tour-corpo">{{ cena.corpo }}</p>
+        {% if cena.dica %}<p class="tour-dica">{{ cena.dica }}</p>{% endif %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+
+  <div class="tour-acoes">
+    <form method="post" action="{{ url_for('pages.tour_done') }}" id="tour-fim">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ destino }}">
+    </form>
+    <button type="button" class="btn ghost" id="tour-voltar" hidden>Voltar</button>
+    <button type="button" class="btn marca" id="tour-avancar" data-ultimo="Começar">Avançar</button>
+  </div>
+
+  <button type="button" class="tour-pular" id="tour-pular">Pular apresentação</button>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ nonce }}">
+/* O tour é curto e o script também. Ele faz três coisas: trocar de cena,
+   manter o progresso e sair — em qualquer momento, pelo botão de pular, pela
+   tecla Esc ou pelo fim do roteiro. Sair sempre passa pelo mesmo POST, que é
+   o que marca "já viu" no servidor: se marcasse só no navegador, trocar de
+   aparelho reapresentaria o tour para quem já usa o app há meses. */
+(function () {
+  'use strict';
+  const cenas = Array.from(document.querySelectorAll('.tour-cena'));
+  const passos = Array.from(document.querySelectorAll('.tour-progresso span'));
+  const avancar = document.getElementById('tour-avancar');
+  const voltar = document.getElementById('tour-voltar');
+  const fim = document.getElementById('tour-fim');
+  let atual = 0;
+
+  function mostrar(i) {
+    atual = Math.max(0, Math.min(i, cenas.length - 1));
+    cenas.forEach((cena, n) => {
+      const ativa = n === atual;
+      cena.classList.toggle('ativa', ativa);
+      // aria-hidden acompanha a classe: leitor de tela não pode ler as cenas
+      // que ainda não chegaram.
+      if (ativa) cena.removeAttribute('aria-hidden');
+      else cena.setAttribute('aria-hidden', 'true');
+    });
+    passos.forEach((p, n) => {
+      p.classList.toggle('visto', n < atual);
+      p.classList.toggle('atual', n === atual);
+    });
+    voltar.hidden = atual === 0;
+    avancar.textContent = atual === cenas.length - 1
+      ? avancar.dataset.ultimo : 'Avançar';
+    // Foco no título da cena para quem navega por teclado não se perder.
+    cenas[atual].querySelector('.tour-titulo')?.focus?.();
+  }
+
+  avancar.addEventListener('click', () => {
+    if (atual === cenas.length - 1) fim.submit();
+    else mostrar(atual + 1);
+  });
+  voltar.addEventListener('click', () => mostrar(atual - 1));
+  document.getElementById('tour-pular').addEventListener('click', () => fim.submit());
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') fim.submit();
+    if (e.key === 'ArrowRight') mostrar(atual + 1);
+    if (e.key === 'ArrowLeft') mostrar(atual - 1);
+  });
+
+  // Arrastar para o lado, que é como se navega qualquer coisa no celular.
+  let x0 = null;
+  const palco = document.querySelector('.tour-palco');
+  palco.addEventListener('touchstart', (e) => { x0 = e.changedTouches[0].clientX; },
+                         { passive: true });
+  palco.addEventListener('touchend', (e) => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 55) mostrar(atual + (dx < 0 ? 1 : -1));
+    x0 = null;
+  }, { passive: true });
+
+  mostrar(0);
+})();
+</script>
+{% endblock %}

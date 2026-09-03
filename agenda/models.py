@@ -186,6 +186,10 @@ class User(Base):
     # de senha (senão a recuperação vira caminho de tomada de conta) e de
     # qualificação de indicação (senão dez e-mails descartáveis viram dinheiro).
     email_verified_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    # Quando a pessoa terminou (ou pulou) a apresentação. Fica no servidor e
+    # não no navegador: se ficasse no localStorage, trocar de aparelho
+    # reapresentaria o tour para quem usa o app há meses.
+    tour_done_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     phone_verified_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))

@@ -97,6 +97,10 @@
   border-top: 1px solid var(--rule);
 }
 .tour-acoes .btn { flex: 1; }
+/* `.btn` declara display, e display de classe vence o `hidden` do HTML. Sem
+   esta linha o "Voltar" aparece na primeira cena, oferecendo voltar para
+   lugar nenhum. */
+.tour-acoes .btn[hidden] { display: none; }
 .tour-pular {
   background: none; border: 0; cursor: pointer; padding: 12px var(--s3);
   font-size: .88rem; color: var(--ink-4); min-height: 44px;

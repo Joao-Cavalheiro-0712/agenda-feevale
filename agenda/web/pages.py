@@ -40,6 +40,7 @@ from agenda.core import (
     study,
     verification,
 )
+from agenda.core import tour as tour_script
 from agenda.core.events import event_card, refresh_statuses
 from agenda.ingest import pipeline
 from agenda.models import (
@@ -197,6 +198,10 @@ def onboarding():
         if user.is_minor:
             user.auto_create_enabled = False
         db().flush()
+        # O tour vem DEPOIS do onboarding, não antes: só aqui a gente sabe o
+        # nível de ensino, e o roteiro fala a língua de cada um.
+        if user.tour_done_at is None:
+            return redirect(url_for("pages.tour"))
         flash("Tudo certo. Agora me conta o que você precisa lembrar.", "success")
         return redirect(url_for("pages.today"))
 
@@ -206,6 +211,55 @@ def onboarding():
         period_labels=periods.PERIOD_LABELS,
         degree_labels=profiles.DEGREE_LABELS,
     )
+
+
+@bp.route("/apresentacao")
+@login_required
+def tour():
+    """A apresentação de primeiro acesso — e a rejogável, pelas configurações.
+
+    Ela roda depois do onboarding porque só aí sabemos o nível de ensino: o
+    roteiro fala a língua de cada um (ver `core/tour.py`).
+    """
+    user = current_user()
+    contexto = academic.active_context(db(), user.id)
+    perfil = (profiles.profile_of_context(contexto) if contexto
+              else profiles.profile_for(None))
+    return render_template(
+        "tour.html",
+        cenas=tour_script.para(perfil, nome=user.name or ""),
+        destino=request.args.get("next", "") or url_for("pages.today"),
+        **_shell(active="today"),
+    )
+
+
+@bp.post("/apresentacao/pronto")
+@login_required
+def tour_done():
+    """Marca "já viu" no servidor.
+
+    No servidor, e não no navegador: guardado no localStorage, trocar de
+    aparelho reapresentaria o tour para quem usa o app há meses — e um tour que
+    volta sozinho é a definição de irritante.
+    """
+    user = current_user()
+    if user.tour_done_at is None:
+        user.tour_done_at = dt.datetime.now(dt.timezone.utc)
+        db().commit()
+    destino = request.form.get("next") or ""
+    if not destino.startswith("/") or destino.startswith("//"):
+        destino = url_for("pages.today")
+    return redirect(destino)
+
+
+@bp.post("/apresentacao/rever")
+@login_required
+def tour_replay():
+    """Ver de novo, pelas configurações."""
+    user = current_user()
+    user.tour_done_at = None
+    db().commit()
+    return redirect(url_for("pages.tour"))
 
 
 @bp.route("/onboarding/voz")

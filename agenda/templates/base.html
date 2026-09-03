@@ -15,6 +15,7 @@
   <link rel="preload" href="{{ url_for('static', filename='fonts/fraunces-latin.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='brand.css') }}?v={{ version }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v={{ version }}">
+  {% block head %}{% endblock %}
 </head>
 <body data-autorefresh="{{ autorefresh|default('on') }}">
 <a class="sr-only" href="#conteudo">Pular para o conteúdo</a>

@@ -1,0 +1,148 @@
+{#- Ilustrações do tour.
+
+   SVG inline, animado por CSS. Nada de biblioteca de animação nem de GIF: um
+   GIF de 400 KB para explicar o app é uma contradição, e biblioteca de
+   animação é peso que só a primeira sessão usa.
+
+   Cada arte mostra uma TRANSFORMAÇÃO, não um ícone bonito. É o que faz a
+   pessoa entender em dois segundos o que ela ganha.
+
+   As classes `desenha`, `surge`, `flutua`, `pulsa`, `onda` e `grifada` estão
+   em tour.css, e todas param sob `prefers-reduced-motion`.
+-#}
+{% set c = cena.arte %}
+
+{%- if c == 'promessa' -%}
+{# Bagunça de papéis entrando à esquerda, virando uma lista alinhada à direita. #}
+<svg viewBox="0 0 320 200" fill="none" aria-hidden="true">
+  <g stroke="var(--ink-4)" stroke-width="2" stroke-linecap="round">
+    <rect class="surge d1" x="14" y="30" width="70" height="46" rx="6" transform="rotate(-9 49 53)"/>
+    <rect class="surge d2" x="26" y="86" width="70" height="46" rx="6" transform="rotate(7 61 109)"/>
+    <rect class="surge d3" x="10" y="130" width="70" height="46" rx="6" transform="rotate(-4 45 153)"/>
+  </g>
+  <path class="desenha d3" d="M104 100 C132 100 140 100 168 100" stroke="var(--ink-3)"
+        stroke-width="2" stroke-linecap="round" stroke-dasharray="4 6"/>
+  <path class="desenha d4" d="M160 94 L170 100 L160 106" stroke="var(--ink-3)"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect class="surge d4" x="186" y="34" width="120" height="132" rx="12"
+        fill="var(--paper-2)" stroke="var(--rule)" stroke-width="2"/>
+  <g stroke="var(--ink)" stroke-width="3" stroke-linecap="round">
+    <path class="desenha d5" d="M202 62 H272"/>
+    <path class="desenha d5" d="M202 88 H288"/>
+    <path class="desenha d6" d="M202 114 H262"/>
+    <path class="desenha d6" d="M202 140 H280"/>
+  </g>
+  <rect class="grifada d6" x="198" y="82" width="94" height="12" rx="3" fill="var(--grifo)"/>
+</svg>
+
+{%- elif c == 'captura' -%}
+{# O botão do meio abrindo a caixa que aceita tudo. #}
+<svg viewBox="0 0 320 200" fill="none" aria-hidden="true">
+  <rect class="surge d1" x="60" y="20" width="200" height="104" rx="14"
+        fill="var(--paper-2)" stroke="var(--rule)" stroke-width="2"/>
+  <path class="desenha d2" d="M82 50 H210" stroke="var(--ink-3)" stroke-width="3" stroke-linecap="round"/>
+  <path class="desenha d3" d="M82 74 H164" stroke="var(--ink-3)" stroke-width="3" stroke-linecap="round"/>
+  <g class="surge d4">
+    <rect x="82" y="92" width="26" height="18" rx="5" fill="none" stroke="var(--ink-4)" stroke-width="2"/>
+    <rect x="116" y="92" width="26" height="18" rx="5" fill="none" stroke="var(--ink-4)" stroke-width="2"/>
+    <rect x="150" y="92" width="26" height="18" rx="5" fill="none" stroke="var(--ink-4)" stroke-width="2"/>
+  </g>
+  <circle class="pulsa" cx="160" cy="160" r="26" fill="var(--grifo)"/>
+  <path d="M160 148 V172 M148 160 H172" stroke="#16130e" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
+
+{%- elif c == 'confirmacao' -%}
+{# O cartão do compromisso aparecendo com o "desfazer" bem visível. #}
+<svg viewBox="0 0 320 200" fill="none" aria-hidden="true">
+  <rect class="surge d1" x="44" y="34" width="232" height="94" rx="12"
+        fill="var(--paper-2)" stroke="var(--rule)" stroke-width="2"/>
+  <rect class="surge d2" x="60" y="52" width="8" height="58" rx="4" fill="var(--grifo)"/>
+  <path class="desenha d2" d="M84 66 H214" stroke="var(--ink)" stroke-width="3.5" stroke-linecap="round"/>
+  <path class="desenha d3" d="M84 88 H176" stroke="var(--ink-3)" stroke-width="2.5" stroke-linecap="round"/>
+  <path class="desenha d3" d="M84 106 H140" stroke="var(--ink-4)" stroke-width="2.5" stroke-linecap="round"/>
+  <g class="surge d5">
+    <circle cx="236" cy="80" r="16" fill="none" stroke="var(--feito, var(--ink))" stroke-width="2.5"/>
+    <path d="M229 80 l5 6 l10 -13" stroke="var(--feito, var(--ink))" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+  <rect class="surge d6" x="100" y="146" width="120" height="30" rx="15"
+        fill="none" stroke="var(--ink-4)" stroke-width="2"/>
+  <path class="surge d6" d="M126 161 h-10 m0 0 l5 -5 m-5 5 l5 5" stroke="var(--ink-3)"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path class="desenha d6" d="M138 161 H198" stroke="var(--ink-3)" stroke-width="2.5" stroke-linecap="round"/>
+</svg>
+
+{%- elif c == 'agenda' -%}
+{# A semana como colunas que crescem, com o lembrete chegando antes. #}
+<svg viewBox="0 0 320 200" fill="none" aria-hidden="true">
+  <path class="desenha d1" d="M30 168 H290" stroke="var(--rule)" stroke-width="2" stroke-linecap="round"/>
+  <g fill="var(--paper-2)" stroke="var(--rule)" stroke-width="2">
+    <rect class="surge d1" x="40" y="120" width="26" height="46" rx="6"/>
+    <rect class="surge d2" x="80" y="96" width="26" height="70" rx="6"/>
+    <rect class="surge d3" x="120" y="132" width="26" height="34" rx="6"/>
+    <rect class="surge d4" x="160" y="72" width="26" height="94" rx="6" fill="var(--grifo)" stroke="none"/>
+    <rect class="surge d5" x="200" y="112" width="26" height="54" rx="6"/>
+    <rect class="surge d6" x="240" y="140" width="26" height="26" rx="6"/>
+  </g>
+  <g class="flutua">
+    <rect x="132" y="20" width="112" height="36" rx="10"
+          fill="var(--paper)" stroke="var(--ink)" stroke-width="2"/>
+    <path d="M148 38 H228" stroke="var(--ink-3)" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="140" cy="38" r="4" fill="var(--alerta, var(--ink))"/>
+  </g>
+  <path class="desenha d6" d="M173 60 V70" stroke="var(--ink-4)" stroke-width="2"
+        stroke-linecap="round" stroke-dasharray="3 4"/>
+</svg>
+
+{%- elif c == 'whatsapp' -%}
+{# Áudio virando compromisso: a onda à esquerda, o cartão à direita. #}
+<svg viewBox="0 0 320 200" fill="none" aria-hidden="true">
+  <rect class="surge d1" x="24" y="56" width="128" height="88" rx="16"
+        fill="var(--paper-2)" stroke="var(--rule)" stroke-width="2"/>
+  <g class="onda" fill="var(--ink)">
+    <rect x="46" y="88" width="4" height="24" rx="2"/>
+    <rect x="58" y="80" width="4" height="40" rx="2" style="animation-delay:.10s"/>
+    <rect x="70" y="72" width="4" height="56" rx="2" style="animation-delay:.20s"/>
+    <rect x="82" y="82" width="4" height="36" rx="2" style="animation-delay:.30s"/>
+    <rect x="94" y="90" width="4" height="20" rx="2" style="animation-delay:.40s"/>
+    <rect x="106" y="84" width="4" height="32" rx="2" style="animation-delay:.50s"/>
+    <rect x="118" y="92" width="4" height="16" rx="2" style="animation-delay:.60s"/>
+  </g>
+  <path class="desenha d4" d="M160 100 H190" stroke="var(--ink-3)" stroke-width="2"
+        stroke-linecap="round" stroke-dasharray="4 6"/>
+  <path class="desenha d5" d="M182 94 L192 100 L182 106" stroke="var(--ink-3)"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect class="surge d5" x="204" y="62" width="92" height="76" rx="12"
+        fill="var(--paper-2)" stroke="var(--rule)" stroke-width="2"/>
+  <rect class="surge d6" x="216" y="76" width="6" height="48" rx="3" fill="var(--grifo)"/>
+  <path class="desenha d6" d="M234 88 H282" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
+  <path class="desenha d6" d="M234 108 H266" stroke="var(--ink-4)" stroke-width="2.5" stroke-linecap="round"/>
+</svg>
+
+{%- elif c == 'familia' -%}
+{# Duas figuras e uma linha entre elas — vínculo, não vigilância. #}
+<svg viewBox="0 0 320 200" fill="none" aria-hidden="true">
+  <g class="surge d1" stroke="var(--ink)" stroke-width="2.5" fill="none">
+    <circle cx="98" cy="76" r="20"/>
+    <path d="M66 142 c0 -20 14 -32 32 -32 s32 12 32 32" stroke-linecap="round"/>
+  </g>
+  <g class="surge d3" stroke="var(--ink-3)" stroke-width="2.5" fill="none">
+    <circle cx="222" cy="82" r="16"/>
+    <path d="M196 142 c0 -17 12 -27 26 -27 s26 10 26 27" stroke-linecap="round"/>
+  </g>
+  <path class="desenha d4" d="M132 108 H188" stroke="var(--grifo)" stroke-width="3"
+        stroke-linecap="round"/>
+  <circle class="pulsa" cx="160" cy="108" r="7" fill="var(--grifo)"/>
+</svg>
+
+{%- else -%}
+{# 'comeco' — a caixa de captura esperando, com o cursor piscando. #}
+<svg viewBox="0 0 320 200" fill="none" aria-hidden="true">
+  <rect class="surge d1" x="40" y="52" width="240" height="96" rx="16"
+        fill="var(--paper-2)" stroke="var(--ink)" stroke-width="2.5"/>
+  <path class="desenha d3" d="M66 92 H150" stroke="var(--ink-4)" stroke-width="3" stroke-linecap="round"/>
+  <rect class="pulsa" x="158" y="80" width="3" height="24" rx="1.5" fill="var(--ink)"/>
+  <circle class="pulsa" cx="248" cy="118" r="18" fill="var(--grifo)"/>
+  <path d="M248 109 V127 M239 118 H257" stroke="#16130e" stroke-width="3" stroke-linecap="round"/>
+</svg>
+{%- endif -%}
