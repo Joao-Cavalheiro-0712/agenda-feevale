@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from agenda.core import reminders as reminders_core
@@ -122,23 +122,50 @@ def deliver(db: Session, user: User, notification: Notification) -> list[str]:
     return channels
 
 
+def _claim(db: Session, reminder: EventReminder) -> bool:
+    """Reivindica o lembrete de forma atômica.
+
+    A aplicação roda com vários workers, cada um com seu agendador. Em vez de
+    eleger um worker (frágil), cada linha é disputada com um UPDATE
+    condicional: só quem consegue mudar PENDING → QUEUED entrega. Assim o
+    lembrete sai uma vez só, mesmo com N processos rodando ao mesmo tempo.
+    """
+    resultado = db.execute(
+        update(EventReminder)
+        .where(
+            EventReminder.id == reminder.id,
+            EventReminder.status == DeliveryStatus.PENDING.value,
+        )
+        .values(status=DeliveryStatus.QUEUED.value)
+    )
+    if resultado.rowcount != 1:
+        return False
+    db.commit()  # fecha a disputa antes de gastar tempo entregando
+    return True
+
+
 def run_due_reminders(db: Session, *, now: dt.datetime | None = None) -> int:
     """Processa a fila de lembretes vencidos. Chamado pelo worker."""
     now = now or dt.datetime.now(dt.timezone.utc)
     sent = 0
     for reminder in reminders_core.due_reminders(db, now=now):
+        if not _claim(db, reminder):
+            continue  # outro worker pegou este
+
         event = db.get(Event, reminder.event_id)
         user = db.get(User, reminder.user_id)
         if event is None or user is None or event.status in ("COMPLETED", "CANCELLED"):
             reminder.status = DeliveryStatus.CANCELLED.value
+            db.commit()
             continue
+
         title, body = reminder_text(event, reminder.offset_days)
         notification = create(db, user, title=title, body=body, event_id=event.id)
         deliver(db, user, notification)
         reminder.status = DeliveryStatus.SENT.value
         reminder.sent_at = now
         sent += 1
-    db.flush()
+        db.commit()
     return sent
 
 

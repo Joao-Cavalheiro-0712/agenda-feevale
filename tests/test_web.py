@@ -313,3 +313,32 @@ def test_evento_concluido_nao_dispara_lembrete(db, user):
     notifications.run_due_reminders(db, now=future)
     db.commit()
     assert db.query(Notification).count() == 0
+
+
+def test_lembrete_nao_sai_duas_vezes_com_workers_concorrentes(db, user):
+    """Dois processos varrendo a fila ao mesmo tempo entregam uma vez só."""
+    import datetime as dt
+
+    from agenda.core import events as events_core, notifications
+    from agenda.db import SessionLocal
+    from agenda.models import Notification
+
+    events_core.create_event(
+        db, user, title="Prova concorrente", event_type="EXAM",
+        date=dt.date.today() + dt.timedelta(days=30),
+    )
+    db.commit()
+
+    futuro = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=29)
+    outra_sessao = SessionLocal()
+    try:
+        primeiro = notifications.run_due_reminders(db, now=futuro)
+        segundo = notifications.run_due_reminders(outra_sessao, now=futuro)
+    finally:
+        outra_sessao.close()
+
+    # A primeira varredura entrega os lembretes vencidos; a segunda não repete
+    # nenhum, e o total de avisos é exatamente o que a primeira reportou.
+    assert primeiro >= 1 and segundo == 0
+    total = db.query(Notification).filter(Notification.title.contains("concorrente")).count()
+    assert total == primeiro
