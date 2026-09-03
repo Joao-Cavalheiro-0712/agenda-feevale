@@ -243,6 +243,17 @@ def _devolver_tempo(db: Session, user_id: str, *, meses: int, agora: dt.datetime
     db.flush()
 
 
+def _contato_verificado(db: Session, user_id: str) -> bool:
+    """Recompensa só nasce de gente real.
+
+    Pagamento já é a barreira principal, mas exigir e-mail confirmado corta a
+    fazenda de contas antes dela — e o custo para quem é honesto é zero, porque
+    o link de confirmação sai no cadastro.
+    """
+    indicado = db.get(User, user_id)
+    return bool(indicado and indicado.email_verified_at is not None)
+
+
 def run_qualification(db: Session, *, now: dt.datetime | None = None) -> dict:
     """Passa indicações da carência para QUALIFIED e concede as recompensas.
 
@@ -268,6 +279,10 @@ def run_qualification(db: Session, *, now: dt.datetime | None = None) -> dict:
         if not _indicado_continua_pagando(db, registro.referred_id):
             registro.status = ReferralStatus.REJECTED.value
             registro.rejection_reason = "assinatura não se manteve"
+            continue
+        if not _contato_verificado(db, registro.referred_id):
+            registro.status = ReferralStatus.REJECTED.value
+            registro.rejection_reason = "e-mail do indicado não confirmado"
             continue
         registro.status = ReferralStatus.QUALIFIED.value
         qualificadas += 1

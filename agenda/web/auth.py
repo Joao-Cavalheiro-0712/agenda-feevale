@@ -13,7 +13,14 @@ import datetime as dt
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
-from agenda.core import login_guard, phone as phone_utils, privacy, sessions
+from agenda import config
+from agenda.core import (
+    login_guard,
+    phone as phone_utils,
+    privacy,
+    sessions,
+    verification,
+)
 from agenda.core.events import log
 from agenda.models import User
 from agenda.security import dummy_verify, hash_password, password_problems, verify_password
@@ -155,6 +162,14 @@ def register():
             origin="web",
             ai_processing=request.form.get("ai_processing", "on") in ("on", "1", "true"),
         )
+        # Verificação de e-mail: sai já, e nunca bloqueia o cadastro se falhar.
+        try:
+            verification.send_email_verification(
+                db(), user, base_url=config.PUBLIC_URL or request.host_url.rstrip("/")
+            )
+        except Exception:  # noqa: BLE001 - e-mail nunca derruba o cadastro
+            pass
+
         # Indicação: o código chega num cookie assinado deixado por /i/<codigo>.
         # Falha aqui nunca pode impedir alguém de criar a conta, então tudo é
         # silencioso — quem perde é o programa de indicação, não o usuário.
@@ -266,3 +281,109 @@ def delete_account():
     session.clear()
     flash("Conta excluída. Sentimos muito por não dar certo.", "success")
     return redirect(url_for("auth.login"))
+
+
+# --------------------------------------------------------------------------- #
+# Verificação de e-mail e recuperação de senha
+# --------------------------------------------------------------------------- #
+def _base_url() -> str:
+    return config.PUBLIC_URL or request.host_url.rstrip("/")
+
+
+@bp.route("/confirmar-email/<token>")
+@limited("verify")
+def confirm_email(token: str):
+    """Confirma o e-mail. Funciona logado ou não — o link chega no e-mail."""
+    user = verification.confirm_email(db(), token)
+    if user is None:
+        flash("Este link expirou ou já foi usado. Peça outro no seu perfil.", "error")
+        return redirect(url_for("auth.login"))
+    flash("E-mail confirmado. Agora você consegue recuperar a conta se precisar.",
+          "success")
+    return redirect(url_for("pages.today") if current_user() else url_for("auth.login"))
+
+
+@bp.post("/conta/reenviar-email")
+@limited("verify")
+@login_required
+def resend_email_verification():
+    user = current_user()
+    if verification.email_verificado(user):
+        flash("Seu e-mail já está confirmado.", "success")
+    elif verification.send_email_verification(db(), user, base_url=_base_url()):
+        flash("Link enviado. Confira sua caixa de entrada.", "success")
+    else:
+        flash(
+            "Não consegui enviar agora. Se o problema continuar, escreva para "
+            f"{config.PRIVACY_EMAIL}.",
+            "error",
+        )
+    return redirect(url_for("pages.security_page"))
+
+
+@bp.route("/recuperar", methods=["GET", "POST"])
+@limited("recover")
+def recover():
+    """Pede o link de recuperação.
+
+    A resposta é SEMPRE a mesma, exista ou não a conta: qualquer diferença
+    observável aqui transforma a recuperação num enumerador de clientes.
+    """
+    if request.method == "POST":
+        verification.request_password_reset(
+            db(), request.form.get("email", ""), base_url=_base_url()
+        )
+        flash(
+            "Se existir uma conta com esse e-mail, o link chega em instantes. "
+            "Confira também o spam.",
+            "success",
+        )
+        return redirect(url_for("auth.login"))
+    return render_template("auth/recuperar.html")
+
+
+@bp.route("/recuperar/<token>", methods=["GET", "POST"])
+@limited("recover")
+def reset_password(token: str):
+    if request.method == "POST":
+        nova = request.form.get("password") or ""
+        problema = password_problems(nova)
+        if problema:
+            flash(problema, "error")
+            return render_template("auth/nova_senha.html", token=token)
+
+        user = verification.reset_password(db(), token, nova)
+        if user is None:
+            flash("Este link expirou ou já foi usado. Peça outro.", "error")
+            return redirect(url_for("auth.recover"))
+        flash("Senha alterada. Entre com a nova senha.", "success")
+        return redirect(url_for("auth.login"))
+
+    return render_template("auth/nova_senha.html", token=token)
+
+
+@bp.post("/conta/telefone/codigo")
+@limited("verify")
+@login_required
+def send_phone_code():
+    user = current_user()
+    if not user.phone_e164:
+        flash("Cadastre um celular no perfil primeiro.", "error")
+        return redirect(url_for("pages.security_page"))
+    codigo = verification.send_phone_code(db(), user)
+    if codigo:  # só em desenvolvimento
+        flash(f"Código (dev): {codigo}", "success")
+    else:
+        flash("Código enviado no seu WhatsApp.", "success")
+    return redirect(url_for("pages.security_page"))
+
+
+@bp.post("/conta/telefone/confirmar")
+@limited("verify")
+@login_required
+def confirm_phone():
+    if verification.confirm_phone(db(), current_user(), request.form.get("code", "")):
+        flash("Celular confirmado.", "success")
+    else:
+        flash("Código inválido ou expirado. Peça outro.", "error")
+    return redirect(url_for("pages.security_page"))

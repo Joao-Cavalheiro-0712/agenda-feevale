@@ -181,6 +181,11 @@ class User(Base):
     # Código de indicação próprio, gerado no primeiro uso. Curto para caber
     # numa mensagem de WhatsApp e ser ditado em voz alta.
     referral_code: Mapped[str | None] = mapped_column(String(16), unique=True, index=True)
+    # Verificação de contato. E-mail verificado é pré-requisito de recuperação
+    # de senha (senão a recuperação vira caminho de tomada de conta) e de
+    # qualificação de indicação (senão dez e-mails descartáveis viram dinheiro).
+    email_verified_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    phone_verified_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -222,6 +227,7 @@ class LinkToken(Base):
     purpose: Mapped[str] = mapped_column(String(40), default="whatsapp_link")
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

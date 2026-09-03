@@ -35,6 +35,7 @@ from agenda.core import (
     scope,
     sessions,
     study,
+    verification,
 )
 from agenda.core.events import event_card, refresh_statuses
 from agenda.ingest import pipeline
@@ -838,6 +839,10 @@ def security_page():
             }
             for row in ativos
         ],
+        email=user.email,
+        email_verificado=verification.email_verificado(user),
+        telefone=user.phone_e164,
+        telefone_verificado=verification.telefone_verificado(user),
         **_shell(active="profile"),
     )
 

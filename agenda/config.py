@@ -164,10 +164,30 @@ RATE_LIMITS = {
     "upload": (int(_env("RATE_LIMIT_UPLOAD", "20")), 60),
     "webhook": (int(_env("RATE_LIMIT_WEBHOOK", "600")), 60),
     "referral": (int(_env("RATE_LIMIT_REFERRAL", "20")), 600),
+    # Recuperação e verificação: apertados, porque são caminhos de tomada de
+    # conta e de envio de e-mail em nome de outra pessoa.
+    "recover": (int(_env("RATE_LIMIT_RECOVER", "5")), 900),
+    "verify": (int(_env("RATE_LIMIT_VERIFY", "10")), 900),
     "checkout": (int(_env("RATE_LIMIT_CHECKOUT", "10")), 600),
 }
 
 ADMIN_EMAILS = {e.strip().lower() for e in _env("ADMIN_EMAILS").split(",") if e.strip()}
+
+# --------------------------------------------------------------------------- #
+# E-mail transacional
+# --------------------------------------------------------------------------- #
+# Sem SMTP_HOST o provedor nulo assume: em desenvolvimento imprime o link no
+# console (dá para testar o fluxo inteiro), em produção registra que NÃO
+# enviou. Fingir envio é o pior comportamento possível aqui.
+SMTP_HOST = _env("SMTP_HOST")
+SMTP_PORT = int(_env("SMTP_PORT", "587"))
+SMTP_USER = _env("SMTP_USER")
+SMTP_PASSWORD = _env("SMTP_PASSWORD")
+SMTP_FROM = _env("SMTP_FROM", f"{APP_NAME} <nao-responda@grifo.app>")
+
+# Validade dos links por e-mail.
+EMAIL_VERIFY_TTL_HOURS = int(_env("EMAIL_VERIFY_TTL_HOURS", "48"))
+PASSWORD_RESET_TTL_MINUTES = int(_env("PASSWORD_RESET_TTL_MINUTES", "30"))
 
 # --------------------------------------------------------------------------- #
 # Pagamento (SPEC §96)

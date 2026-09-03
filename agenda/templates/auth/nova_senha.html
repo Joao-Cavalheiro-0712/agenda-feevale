@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
+{% block title %}Nova senha · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><a class="wordmark" href="{{ url_for('pages.home') }}">{{ mark() }}{{ APP_NAME }}</a></div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead" style="padding-top:var(--s7)">
+  <p class="label kicker">Quase lá</p>
+  <h2 class="h-page">Criar senha nova</h2>
+  <p class="sub">Ao salvar, todas as sessões abertas nessa conta são encerradas — inclusive a de quem não devia estar lá.</p>
+</div>
+<form method="post" style="max-width:380px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="field"><span>Nova senha</span><input type="password" name="password" required autocomplete="new-password" autofocus></label>
+  <button class="btn block" type="submit">Salvar e entrar</button>
+</form>
+{% endblock %}

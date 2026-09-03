@@ -20,6 +20,9 @@ def _pessoa(db, email: str, nome: str = "Alguém") -> User:
         name=nome, email=email, password_hash=hash_password("senhaforte123"),
         onboarding_done=True, birth_year=1999,
         accepted_terms_version="2026-09-03", accepted_privacy_version="2026-09-03",
+        # E-mail confirmado é o estado normal de quem chegou a pagar — e a
+        # qualificação da indicação exige isso (antifraude).
+        email_verified_at=dt.datetime.now(dt.timezone.utc),
     )
     db.add(pessoa)
     db.flush()

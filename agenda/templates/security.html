@@ -44,6 +44,57 @@
 </section>
 
 <section class="section">
+  <header><h3>Contatos confirmados</h3></header>
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--s3)">
+      <div>
+        <strong style="font-size:.92rem">E-mail</strong>
+        <p class="tiny muted">{{ email }}</p>
+      </div>
+      {% if email_verificado %}
+        <span class="tag feito">Confirmado</span>
+      {% else %}
+        <span class="tag atencao">Pendente</span>
+      {% endif %}
+    </div>
+    {% if not email_verificado %}
+      <p class="help">Sem o e-mail confirmado não dá para recuperar a conta se você esquecer a senha.</p>
+      <form method="post" action="{{ url_for('auth.resend_email_verification') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn ghost block" type="submit">Enviar link de confirmação</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="card" style="margin-top:var(--s4)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--s3)">
+      <div>
+        <strong style="font-size:.92rem">Celular</strong>
+        <p class="tiny muted">{{ telefone or 'Nenhum cadastrado' }}</p>
+      </div>
+      {% if telefone_verificado %}
+        <span class="tag feito">Confirmado</span>
+      {% elif telefone %}
+        <span class="tag atencao">Pendente</span>
+      {% endif %}
+    </div>
+    {% if telefone and not telefone_verificado %}
+      <p class="help">Confirmar o celular libera o uso pelo WhatsApp com segurança.</p>
+      <form method="post" action="{{ url_for('auth.send_phone_code') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn ghost block" type="submit">Receber código no WhatsApp</button>
+      </form>
+      <form method="post" action="{{ url_for('auth.confirm_phone') }}" style="margin-top:var(--s4)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="field"><span>Código de 6 dígitos</span>
+          <input type="text" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code"></label>
+        <button class="btn block" type="submit">Confirmar celular</button>
+      </form>
+    {% endif %}
+  </div>
+</section>
+
+<section class="section">
   <header><h3>Senha</h3></header>
   <form method="post" action="{{ url_for('auth.change_password') }}" class="card">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

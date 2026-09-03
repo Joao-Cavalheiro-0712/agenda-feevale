@@ -15,7 +15,8 @@
   <label class="field"><span>Senha</span><input type="password" name="password" required autocomplete="current-password"></label>
   <button class="btn block" type="submit">Entrar</button>
 </form>
-<p class="tiny muted" style="margin-top:var(--s5)">Ainda não tem conta? <a href="{{ url_for('auth.register') }}" class="link">Criar agora</a></p>
+<p class="tiny muted" style="margin-top:var(--s5)"><a href="{{ url_for('auth.recover') }}" class="link">Esqueci minha senha</a></p>
+<p class="tiny muted" style="margin-top:var(--s3)">Ainda não tem conta? <a href="{{ url_for('auth.register') }}" class="link">Criar agora</a></p>
 <p class="tiny muted" style="margin-top:var(--s6)">
   <a class="link" href="{{ url_for('pages.terms_page') }}">Termos de uso</a>
   · <a class="link" href="{{ url_for('pages.privacy_page') }}">Política de privacidade</a>

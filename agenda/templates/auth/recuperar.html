@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
+{% block title %}Recuperar acesso · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><a class="wordmark" href="{{ url_for('pages.home') }}">{{ mark() }}{{ APP_NAME }}</a></div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead" style="padding-top:var(--s7)">
+  <p class="label kicker">Sem pânico</p>
+  <h2 class="h-page">Recuperar acesso</h2>
+  <p class="sub">Digite o e-mail da conta. Se ele estiver confirmado, mandamos um link para você criar uma senha nova.</p>
+</div>
+<form method="post" style="max-width:380px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="field"><span>E-mail</span><input type="email" name="email" required autocomplete="email" autofocus></label>
+  <button class="btn block" type="submit">Enviar link</button>
+</form>
+<p class="tiny muted" style="margin-top:var(--s5)">Lembrou? <a href="{{ url_for('auth.login') }}" class="link">Voltar para o login</a></p>
+{% endblock %}
