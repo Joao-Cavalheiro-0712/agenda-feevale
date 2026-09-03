@@ -97,9 +97,17 @@ def csrf_ok(session_token: str | None, submitted: str | None) -> bool:
 _hits: dict[str, deque] = defaultdict(deque)
 
 
-def rate_limit(bucket: str, identity: str, *, limit: int | None = None, window: int = 60) -> bool:
-    """True se a requisição pode seguir; False se estourou o limite."""
-    limit = limit or config.RATE_LIMITS.get(bucket, 60)
+def rate_limit(
+    bucket: str, identity: str, *, limit: int | None = None, window: int | None = None
+) -> bool:
+    """True se a requisição pode seguir; False se estourou o limite.
+
+    Cada balde tem teto e janela próprios (`config.RATE_LIMITS`): rajada de
+    cadastro numa sala de aula é legítima, rajada de login não é.
+    """
+    padrao = config.RATE_LIMITS.get(bucket, (60, 60))
+    limit = limit or padrao[0]
+    window = window or padrao[1]
     key = f"{bucket}:{identity}"
     now = time.time()
     hits = _hits[key]

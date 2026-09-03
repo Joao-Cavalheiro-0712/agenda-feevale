@@ -95,7 +95,14 @@ def test_escrita_em_objeto_alheio_e_recusada(client, db, outro_usuario):
     completar = client.post(f"/api/events/{alvo}/complete", json={"done": True},
                             headers={"X-CSRF-Token": token})
 
-    assert patch.status_code == 400 and delete.status_code == 400 and completar.status_code == 400
+    # 404, o mesmo de "não existe": quem varre ids não descobre nada.
+    assert patch.status_code == 404 and delete.status_code == 404 and completar.status_code == 404
+    inexistente = client.patch("/api/events/naoexiste", json={"title": "x"},
+                               headers={"X-CSRF-Token": token})
+    assert inexistente.status_code == patch.status_code
+    assert inexistente.get_json()["message"] == patch.get_json()["message"], (
+        "a resposta distingue 'não é seu' de 'não existe' — isso permite enumerar"
+    )
     db.expire_all()
     assert db.get(Event, alvo).title == "Prova secreta da Maria"
 

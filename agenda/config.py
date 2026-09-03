@@ -116,15 +116,18 @@ STORAGE_DIR = _env("STORAGE_DIR", os.path.join(os.getcwd(), "storage"))
 # --------------------------------------------------------------------------- #
 # Feature flags (SPEC §98)
 # --------------------------------------------------------------------------- #
+# Só entra aqui flag que ALGUM código de fato lê. Flag decorativa é pior que
+# nenhuma: o operador desliga `FEATURE_FAMILY=false` achando que desligou
+# família, e ela continua ligada — um controle que mente é um risco, não um
+# recurso. Família, planejador de estudo e calendário são governados pelo
+# entitlement do plano (`core/billing.py`), que é o portão de verdade; ter dois
+# portões para a mesma coisa é como se cria bug de permissão.
 FEATURE_FLAGS: dict[str, bool] = {
     "whatsapp_enabled": _flag("FEATURE_WHATSAPP", True),
     "document_import_enabled": _flag("FEATURE_DOCUMENT_IMPORT", True),
     "auto_create_high_confidence": _flag("FEATURE_AUTO_CREATE", True),
     "voice_capture_enabled": _flag("FEATURE_VOICE", True),
     "sharing_enabled": _flag("FEATURE_SHARING", True),
-    "family_enabled": _flag("FEATURE_FAMILY", False),
-    "study_planner_enabled": _flag("FEATURE_STUDY_PLANNER", False),
-    "calendar_sync_enabled": _flag("FEATURE_CALENDAR_SYNC", False),
     "billing_enabled": _flag("FEATURE_BILLING", False),
 }
 
@@ -136,14 +139,27 @@ def flag(name: str) -> bool:
 # --------------------------------------------------------------------------- #
 # Rate limits (SPEC §111) — requisições por janela de 60s
 # --------------------------------------------------------------------------- #
+# Limite por balde: (requisições, janela em segundos).
+#
+# O cadastro tem janela longa e teto alto de propósito. O público é estudante,
+# e estudante entra em rajada: uma turma inteira sai pelo mesmo IP do wi‑fi da
+# escola, ou pelo NAT da universidade. Um limite de 5 por minuto travaria a
+# sexta pessoa da sala — e a sala é justamente onde o produto se espalha.
+#
+# O que barra conta falsa não é volume de cadastro, é o que a conta consegue
+# fazer: as quotas do plano grátis (documentos, mensagens de IA) já limitam o
+# custo por conta, e a recompensa de indicação só paga quando o indicado vira
+# ASSINANTE — cartão de crédito é a prova de gente que nenhum limite de IP dá.
 RATE_LIMITS = {
-    "login": int(_env("RATE_LIMIT_LOGIN", "10")),
-    "register": int(_env("RATE_LIMIT_REGISTER", "5")),
-    "share": int(_env("RATE_LIMIT_SHARE", "20")),
-    "export": int(_env("RATE_LIMIT_EXPORT", "10")),
-    "assistant": int(_env("RATE_LIMIT_ASSISTANT", "30")),
-    "upload": int(_env("RATE_LIMIT_UPLOAD", "20")),
-    "webhook": int(_env("RATE_LIMIT_WEBHOOK", "600")),
+    "login": (int(_env("RATE_LIMIT_LOGIN", "10")), 60),
+    "register": (int(_env("RATE_LIMIT_REGISTER", "40")), 600),
+    "share": (int(_env("RATE_LIMIT_SHARE", "20")), 60),
+    "export": (int(_env("RATE_LIMIT_EXPORT", "10")), 60),
+    "assistant": (int(_env("RATE_LIMIT_ASSISTANT", "30")), 60),
+    "upload": (int(_env("RATE_LIMIT_UPLOAD", "20")), 60),
+    "webhook": (int(_env("RATE_LIMIT_WEBHOOK", "600")), 60),
+    "referral": (int(_env("RATE_LIMIT_REFERRAL", "20")), 600),
+    "checkout": (int(_env("RATE_LIMIT_CHECKOUT", "10")), 600),
 }
 
 ADMIN_EMAILS = {e.strip().lower() for e in _env("ADMIN_EMAILS").split(",") if e.strip()}

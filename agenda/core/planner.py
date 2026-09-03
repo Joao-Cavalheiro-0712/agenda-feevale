@@ -9,7 +9,7 @@ import calendar as _calendar
 import datetime as dt
 from collections import defaultdict
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from agenda.core import profiles, recurrence
@@ -48,7 +48,17 @@ def _events_between(
         Event.local_date <= end,
     )
     if context_id:
-        stmt = stmt.where(Event.education_context_id == context_id)
+        # Inclui o que não tem contexto de propósito. Dado que perdeu o
+        # contexto (migração, contexto arquivado, evento antigo) não pode virar
+        # invisível: para quem usa, invisível é igual a apagado — e o resumo da
+        # semana, que não filtra, ainda contaria esse evento, deixando a tela
+        # dizer "1 entrega" e mostrar lista vazia.
+        stmt = stmt.where(
+            or_(
+                Event.education_context_id == context_id,
+                Event.education_context_id.is_(None),
+            )
+        )
     if subject_id:
         stmt = stmt.where(Event.subject_id == subject_id)
     if not include_cancelled:

@@ -12,8 +12,36 @@
 <div class="pagehead">
   <p class="label kicker">Agenda de</p>
   <h2 class="h-page">{{ estudante.name or 'Estudante' }}</h2>
-  <p class="sub">Você vê o que ele autorizou. Nada aqui é editável sem permissão.</p>
+  <p class="sub">
+    Você vê o que ele autorizou.
+    {% if pode_adicionar %}Pode adicionar compromissos, e ele vê que foi você.
+    {% else %}Não dá para editar nada daqui.{% endif %}
+  </p>
 </div>
+
+{% if pode_adicionar %}
+<section class="section">
+  <header><h3>Adicionar na agenda</h3></header>
+  <form method="post" action="{{ url_for('pages.family_add_event', student_id=estudante.id) }}" class="card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field"><span>O que é</span><input type="text" name="title" placeholder="Levar autorização assinada" required></label>
+    <div class="row">
+      <label class="field"><span>Quando</span><input type="date" name="date" required></label>
+      <label class="field">
+        <span>Tipo</span>
+        <select name="type">
+          <option value="REMINDER">Lembrete</option>
+          <option value="MATERIAL">Levar para a aula</option>
+          <option value="SCHOOL_EVENT">Evento da escola</option>
+          <option value="ADMINISTRATIVE">Prazo</option>
+        </select>
+      </label>
+    </div>
+    <button class="btn block" type="submit">Adicionar</button>
+    <p class="help">{{ estudante.name or 'Ele' }} vai ver que foi você que adicionou.</p>
+  </form>
+</section>
+{% endif %}
 
 {% if grupos %}
   {% for grupo in grupos %}

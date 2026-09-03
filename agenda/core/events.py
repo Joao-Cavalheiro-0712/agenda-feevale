@@ -98,9 +98,21 @@ def create_event(
     tz = tz_of(user)
     starts_at = local_datetime(date, start_time, tz)
     ends_at = local_datetime(date, end_time, tz)
+
+    # Todo evento pertence a um contexto. Um lembrete sem matéria ("pagar a
+    # mensalidade") não tem de onde herdar, então cai no contexto ativo — sem
+    # isso ele nasce órfão e as telas que filtram por contexto não o mostram.
+    if not context_id:
+        context_id = subject.education_context_id if subject else None
+    if not context_id:
+        from agenda.core.academic import active_context
+
+        ativo = active_context(db, user.id)
+        context_id = ativo.id if ativo else None
+
     event = Event(
         user_id=user.id,
-        education_context_id=context_id or (subject.education_context_id if subject else None),
+        education_context_id=context_id,
         subject_id=subject.id if subject else None,
         type=event_type,
         title=title.strip()[:300],

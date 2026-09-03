@@ -32,6 +32,19 @@ from agenda.web.deps import current_user, db, limited, login_required
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 
+def _http_status(result) -> int:
+    """Código HTTP de um resultado do motor de ações.
+
+    "Não é seu" e "não existe" viram o MESMO 404 com a MESMA mensagem: quem
+    varre ids não consegue descobrir o que existe na conta de outra pessoa. A
+    escolha vem do `reason` que o motor devolve, e não de inspecionar o texto
+    da mensagem — texto muda, contrato não.
+    """
+    if result.ok:
+        return 200
+    return 404 if result.reason == "not_found" else 400
+
+
 def _context_id():
     context = academic.active_context(db(), current_user().id)
     return context.id if context else None
@@ -49,6 +62,13 @@ def capture():
 
     uploaded = request.files.get("file")
     if uploaded and uploaded.filename:
+        # Interruptor de operação: se o custo de leitura de documento sair de
+        # controle, isto desliga a entrada inteira sem deploy.
+        if not config.flag("document_import_enabled"):
+            return jsonify({
+                "status": "REJECTED",
+                "message": "Leitura de documentos está temporariamente indisponível.",
+            }), 503
         pode, aviso = billing.check_quota(
             db(), user, billing.MAX_DOCUMENT_IMPORTS, "document_imports"
         )
@@ -75,6 +95,11 @@ def capture():
 
     audio = request.files.get("audio")
     if audio:
+        if not config.flag("voice_capture_enabled"):
+            return jsonify({
+                "status": "REJECTED",
+                "message": "Captura por áudio está temporariamente indisponível.",
+            }), 503
         pode, aviso = billing.check_quota(db(), user, billing.MAX_AI_MESSAGES, "ai_messages")
         if not pode:
             return jsonify({"status": "QUOTA", "message": aviso, "upgrade": "/planos"}), 402
@@ -139,6 +164,8 @@ def onboarding_voice():
     texto = (request.form.get("text") or "").strip()[:4000]
 
     if audio is not None:
+        if not config.flag("voice_capture_enabled"):
+            return jsonify({"ok": False, "reason": "Áudio temporariamente indisponível."}), 503
         if not privacy.ai_allowed(user):
             return jsonify(
                 {"ok": False, "reason": "Interpretação automática desligada na sua conta."}
@@ -290,7 +317,7 @@ def create_event():
         channel="web",
     )
     result = actions_core.execute(db(), current_user(), proposal, confirmed=True)
-    return jsonify(result.as_dict()), (200 if result.ok else 400)
+    return jsonify(result.as_dict()), _http_status(result)
 
 
 @bp.patch("/events/<event_id>")
@@ -302,7 +329,7 @@ def update_event(event_id: str):
         action=Intent.UPDATE_EVENT.value, payload=payload, confidence=1.0, channel="web"
     )
     result = actions_core.execute(db(), current_user(), proposal, confirmed=True)
-    return jsonify(result.as_dict()), (200 if result.ok else 400)
+    return jsonify(result.as_dict()), _http_status(result)
 
 
 @bp.post("/events/<event_id>/complete")
@@ -316,7 +343,7 @@ def complete_event(event_id: str):
         channel="web",
     )
     result = actions_core.execute(db(), current_user(), proposal, confirmed=True)
-    return jsonify(result.as_dict()), (200 if result.ok else 400)
+    return jsonify(result.as_dict()), _http_status(result)
 
 
 @bp.delete("/events/<event_id>")
@@ -329,7 +356,7 @@ def delete_event(event_id: str):
         channel="web",
     )
     result = actions_core.execute(db(), current_user(), proposal, confirmed=True)
-    return jsonify(result.as_dict()), (200 if result.ok else 400)
+    return jsonify(result.as_dict()), _http_status(result)
 
 
 @bp.put("/events/<event_id>/checklist")

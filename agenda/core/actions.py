@@ -102,6 +102,9 @@ class ActionProposal:
 class ActionResult:
     status: str  # EXECUTED | NEEDS_CONFIRMATION | NEEDS_CLARIFICATION | REJECTED | FAILED | ANSWERED
     message: str = ""
+    # Motivo legível por máquina, quando houver: "not_found", "invalid".
+    # Existe para a camada HTTP escolher o código sem inspecionar a mensagem.
+    reason: str = ""
     action_id: str | None = None
     cards: list[dict] = field(default_factory=list)
     question: str = ""
@@ -128,6 +131,24 @@ class ActionResult:
 
 class ValidationError(Exception):
     """Payload inválido — a IA propôs algo que não passa no schema."""
+
+    def __init__(self, message: str, *, reason: str = "invalid"):
+        super().__init__(message)
+        self.reason = reason
+
+
+class NotFound(ValidationError):
+    """Objeto inexistente OU de outra conta.
+
+    As duas coisas na mesma exceção, com a MESMA mensagem, de propósito: se a
+    resposta distinguisse "não existe" de "não é seu", qualquer pessoa poderia
+    varrer ids e descobrir o que existe na conta alheia. O motivo legível por
+    máquina viaja separado da mensagem, para o HTTP devolver 404 sem que a
+    camada web precise adivinhar pelo texto.
+    """
+
+    def __init__(self, message: str = "Evento não encontrado."):
+        super().__init__(message, reason="not_found")
 
 
 # --------------------------------------------------------------------------- #
@@ -190,7 +211,7 @@ def execute(
     try:
         validate(proposal)
     except ValidationError as exc:
-        return ActionResult("REJECTED", message=str(exc))
+        return ActionResult("REJECTED", message=str(exc), reason=exc.reason)
 
     intent = proposal.intent
 
@@ -244,7 +265,7 @@ def execute(
         result = handler(db, user, proposal, record)
     except ValidationError as exc:
         record.status = "REJECTED"
-        return ActionResult("REJECTED", message=str(exc))
+        return ActionResult("REJECTED", message=str(exc), reason=exc.reason)
     except Exception as exc:  # noqa: BLE001 - falha de execução vira erro amigável
         record.status = "FAILED"
         return ActionResult("FAILED", message=f"Não consegui concluir: {exc}")
@@ -500,7 +521,7 @@ def _handle_update_event(db, user, proposal, record) -> ActionResult:
     payload = proposal.payload
     event = owns(db, user, Event, payload.get("event_id"))
     if event is None:
-        raise ValidationError("Evento não encontrado.")
+        raise NotFound()
     record.before_state = events_core.snapshot(event)
 
     changes = {k: v for k, v in payload.items() if k in {
@@ -541,7 +562,7 @@ def _handle_update_event(db, user, proposal, record) -> ActionResult:
 def _handle_delete_event(db, user, proposal, record) -> ActionResult:
     event = owns(db, user, Event, proposal.payload.get("event_id"))
     if event is None:
-        raise ValidationError("Evento não encontrado.")
+        raise NotFound()
     record.before_state = events_core.snapshot(event)
     record.target_type = "event"
     record.target_id = event.id
@@ -557,7 +578,7 @@ def _handle_delete_event(db, user, proposal, record) -> ActionResult:
 def _handle_complete_event(db, user, proposal, record) -> ActionResult:
     event = owns(db, user, Event, proposal.payload.get("event_id"))
     if event is None:
-        raise ValidationError("Evento não encontrado.")
+        raise NotFound()
     record.before_state = events_core.snapshot(event)
     done = proposal.payload.get("done", True)
     events_core.complete_event(db, event, done=bool(done))
@@ -662,7 +683,7 @@ def _handle_set_reminder(db, user, proposal, record) -> ActionResult:
 
     event = owns(db, user, Event, proposal.payload.get("event_id"))
     if event is None:
-        raise ValidationError("Evento não encontrado.")
+        raise NotFound()
     offsets = proposal.payload.get("offsets")
     if offsets:
         user.reminder_days = ",".join(str(int(o)) for o in offsets)

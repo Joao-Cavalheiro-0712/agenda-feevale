@@ -492,6 +492,9 @@ def documents():
 @onboarding_required
 @limited("upload")
 def upload_documents():
+    if not config.flag("document_import_enabled"):
+        flash("Leitura de documentos está temporariamente indisponível.", "error")
+        return redirect(url_for("pages.documents"))
     user = current_user()
     files = [f for f in request.files.getlist("files") if f and f.filename]
     if not files:
@@ -1147,6 +1150,58 @@ def family_revoke(link_id: str):
     else:
         flash("Vínculo não encontrado.", "error")
     return redirect(url_for("pages.family_page"))
+
+
+@bp.post("/familia/<student_id>/compromisso")
+@login_required
+def family_add_event(student_id: str):
+    """Responsável adiciona um compromisso na agenda do estudante.
+
+    Existe porque a permissão "pode adicionar compromissos" era oferecida,
+    salva e checada — e não tinha rota nenhuma por trás. Permissão que não faz
+    nada é pior que permissão ausente: o responsável marca, confia e não
+    acontece.
+
+    O registro fica com autoria explícita: quem olha a agenda vê que aquilo
+    veio do responsável, não do próprio estudante.
+    """
+    user = current_user()
+    if not family.can_add(db(), user, student_id):
+        abort(404)
+    estudante = db().get(User, student_id)
+    if estudante is None or estudante.deleted_at is not None:
+        abort(404)
+
+    titulo = (request.form.get("title") or "").strip()[:200]
+    data_bruta = (request.form.get("date") or "").strip()
+    if not titulo or not data_bruta:
+        flash("Diga o que é e para quando.", "error")
+        return redirect(url_for("pages.family_student_agenda", student_id=student_id))
+    try:
+        data = dt.date.fromisoformat(data_bruta)
+    except ValueError:
+        flash("Data inválida.", "error")
+        return redirect(url_for("pages.family_student_agenda", student_id=student_id))
+
+    tipo = request.form.get("type") or EventType.REMINDER.value
+    if tipo not in {t.value for t in EventType}:
+        tipo = EventType.REMINDER.value
+
+    from agenda.core import events as events_core
+    from agenda.models import SourceType
+
+    evento = events_core.create_event(
+        db(), estudante, title=titulo, event_type=tipo, date=data,
+        description=f"Adicionado por {user.name or 'responsável'}.",
+        source_type=SourceType.MANUAL.value,
+    )
+    events_core.log(
+        db(), user_id=estudante.id, actor="guardian", action="CREATE_EVENT",
+        object_type="event", object_id=evento.id,
+        after={"by_guardian": user.id}, origin="web",
+    )
+    flash(f"Adicionei na agenda de {estudante.name or 'seu filho'}.", "success")
+    return redirect(url_for("pages.family_student_agenda", student_id=student_id))
 
 
 @bp.route("/familia/<student_id>/agenda")
