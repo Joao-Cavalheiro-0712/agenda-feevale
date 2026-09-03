@@ -299,6 +299,30 @@ def check_quota(db: Session, user: User, entitlement: str, metric: str) -> tuple
     )
 
 
+class QuotaExceeded(Exception):
+    """A conta bateu o limite do plano. A mensagem é escrita para o usuário ler."""
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
+def enforce(
+    db: Session, user: User, entitlement: str, metric: str, *, amount: int = 1
+) -> None:
+    """Confere a quota e levanta se estourou. NÃO consome.
+
+    Existe para que a checagem possa morar dentro da operação (ingestão,
+    assistente, transcrição) em vez de em cada chamador. Toda vez que a
+    checagem fica no chamador, um caminho novo nasce sem ela — foi assim que a
+    importação por formulário, o onboarding por texto e o WhatsApp ficaram sem
+    limite nenhum enquanto a API tinha.
+    """
+    pode, aviso = check_quota(db, user, entitlement, metric)
+    if not pode:
+        raise QuotaExceeded(aviso)
+
+
 def consume(db: Session, user: User, metric: str, *, amount: int = 1) -> int:
     periodo = _period_key()
     row = db.scalars(

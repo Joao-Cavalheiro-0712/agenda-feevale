@@ -24,6 +24,9 @@ from agenda.models import (
     User,
 )
 
+# Tipos aceitos na escrita. Fechado de propósito: tipo é enum.
+_TIPOS_VALIDOS = frozenset(t.value for t in EventType)
+
 # Rótulos por nível educacional (SPEC §47: a UI pode usar nomes diferentes).
 TYPE_LABELS = {
     EventType.CLASS.value: "Aula",
@@ -95,6 +98,14 @@ def create_event(
     group_work: bool = False,
     schedule: bool = True,
 ) -> Event:
+    # O tipo é um enum fechado, e a validação vive AQUI e não em cada chamador.
+    # Dois caminhos escreviam tipo livre — o formulário de importação de
+    # documento e a cópia de uma coleção compartilhada — e isso virava injeção
+    # de linha no arquivo .ics de quem assina o calendário. Validar na porta de
+    # escrita cobre todos os caminhos, inclusive os que ainda não existem.
+    if event_type not in _TIPOS_VALIDOS:
+        event_type = EventType.OTHER.value
+
     tz = tz_of(user)
     starts_at = local_datetime(date, start_time, tz)
     ends_at = local_datetime(date, end_time, tz)

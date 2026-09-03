@@ -202,19 +202,45 @@ def revoke_for(db: Session, referred: User, *, reason: str) -> None:
     registro.qualified_at = None
     db.flush()
 
-    # Se a recompensa já saiu, ela é revogada — mas nunca apagada.
-    creditos = db.scalars(
+    # A recompensa é revogada mesmo que JÁ TENHA SIDO APLICADA. Filtrar por
+    # `applied_at is None` deixava o golpe passar: a carência é de 8 dias e um
+    # chargeback de cartão pode chegar meses depois, quando o crédito já virou
+    # tempo de assinatura. Sem esta parte, o argumento antifraude inteiro do
+    # módulo cai.
+    agora = dt.datetime.now(dt.timezone.utc)
+    credito = db.scalars(
         select(Reward).where(
             Reward.user_id == registro.referrer_id,
             Reward.kind == RewardKind.FREE_MONTH.value,
             Reward.revoked_at.is_(None),
-            Reward.applied_at.is_(None),
         ).order_by(Reward.created_at.desc()).limit(1)
     ).first()
-    if creditos is not None:
-        creditos.revoked_at = dt.datetime.now(dt.timezone.utc)
-        creditos.revoked_reason = reason[:160]
-        db.flush()
+    if credito is None:
+        return
+
+    credito.revoked_at = agora
+    credito.revoked_reason = reason[:160]
+    if credito.applied_at is not None:
+        _devolver_tempo(db, registro.referrer_id, meses=credito.months, agora=agora)
+    db.flush()
+
+
+def _devolver_tempo(db: Session, user_id: str, *, meses: int, agora: dt.datetime) -> None:
+    """Desfaz o tempo de assinatura que um crédito revogado tinha concedido.
+
+    Nunca corta abaixo de agora: quem indicou não perde o período que ele mesmo
+    pagou — perde só o que veio da indicação que caiu.
+    """
+    from agenda.models import Subscription
+
+    sub = db.scalars(select(Subscription).where(Subscription.user_id == user_id)).first()
+    if sub is None or sub.current_period_end is None:
+        return
+    fim = sub.current_period_end
+    if fim.tzinfo is None:
+        fim = fim.replace(tzinfo=dt.timezone.utc)
+    sub.current_period_end = max(agora, fim - dt.timedelta(days=30 * max(1, meses)))
+    db.flush()
 
 
 def run_qualification(db: Session, *, now: dt.datetime | None = None) -> dict:

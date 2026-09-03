@@ -88,6 +88,11 @@ WHATSAPP_API_VERSION = _env("WHATSAPP_API_VERSION", "v21.0")
 
 # Telegram continua suportado como canal alternativo de notificação.
 TELEGRAM_BOT_TOKEN = _env("TELEGRAM_BOT_TOKEN")
+# Segredo registrado no setWebhook e devolvido pelo Telegram no cabeçalho
+# X-Telegram-Bot-Api-Secret-Token. Sem ele, qualquer pessoa que descubra um
+# chat_id executa ações na conta daquele usuário — o webhook é um caminho de
+# escrita autenticado só pela identidade que o próprio corpo declara.
+TELEGRAM_WEBHOOK_SECRET = _env("TELEGRAM_WEBHOOK_SECRET")
 
 # --------------------------------------------------------------------------- #
 # Web Push (SPEC §51) — chaves geradas localmente com `python -m agenda.cli vapid`

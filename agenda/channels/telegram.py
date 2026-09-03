@@ -7,6 +7,7 @@ está aprovado.
 from __future__ import annotations
 
 import datetime as dt
+import hmac
 import threading
 import time
 
@@ -95,6 +96,24 @@ def link_chat(db: Session, user: User, chat_id: str) -> UserPhone:
     return link
 
 
+def valid_secret(header: str | None) -> bool:
+    """Confere o segredo que o Telegram devolve no webhook.
+
+    Sem isto, o endpoint é um caminho de ESCRITA não autenticado: quem
+    descobrir o chat_id de alguém (um grupo em comum, uma mensagem
+    encaminhada, um bot de "qual é meu id") manda uma requisição e cria,
+    remarca ou apaga compromissos na conta daquela pessoa.
+
+    Em produção falha fechado: sem segredo configurado, nenhuma requisição
+    passa. Em desenvolvimento, sem segredo, o webhook segue aberto para não
+    travar quem está testando com um túnel local.
+    """
+    esperado = config.TELEGRAM_WEBHOOK_SECRET
+    if not esperado:
+        return not config.IS_PRODUCTION
+    return bool(header) and hmac.compare_digest(esperado, header)
+
+
 def _user_of_chat(db: Session, chat_id: str) -> User | None:
     link = db.scalars(
         select(UserPhone).where(
@@ -119,10 +138,16 @@ def handle_update(update: dict) -> None:
         if text.lower().startswith("/start"):
             parts = text.split()
             if len(parts) > 1:
+                from agenda.channels import whatsapp as whatsapp_channel
                 from agenda.models import LinkToken
 
+                # O propósito faz parte da identidade do token: um código
+                # emitido para vincular WhatsApp não pode vincular Telegram.
                 token = db.scalars(
-                    select(LinkToken).where(LinkToken.token == parts[1].strip().upper())
+                    select(LinkToken).where(
+                        LinkToken.token == parts[1].strip().upper(),
+                        LinkToken.purpose.in_(whatsapp_channel.CHANNEL_LINK_PURPOSES),
+                    )
                 ).first()
                 expires = token.expires_at if token else None
                 if expires is not None and expires.tzinfo is None:
@@ -148,6 +173,21 @@ def handle_update(update: dict) -> None:
         if user is None:
             base = config.PUBLIC_URL or ""
             _send_raw(chat_id, f"Este chat não está conectado a uma conta. Abra {base}/perfil.")
+            return
+
+        # A trava de consentimento também vale aqui: o webhook não passa pelo
+        # before_request, então cada canal repete a checagem. Sem isto, uma
+        # conta pausada por falta de autorização do responsável continuaria
+        # funcionando por este caminho.
+        from agenda.core import privacy
+
+        pendencia = privacy.blocked_reason(db, user)
+        if pendencia is not None:
+            _send_raw(chat_id, (
+                "Sua conta está pausada esperando a autorização do responsável."
+                if pendencia == "responsavel" else
+                "Atualizamos os termos. Abra o aplicativo para aceitar a nova versão."
+            ))
             return
 
         if not text:

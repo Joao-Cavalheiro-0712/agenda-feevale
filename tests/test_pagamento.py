@@ -227,7 +227,13 @@ def test_checkout_recusa_plano_invalido(db, user, com_stripe):
         service.start_checkout(db, user, plan="FREE", cycle="MONTHLY", base_url="https://x")
 
 
-def test_desconto_de_indicacao_sai_do_registro_e_nao_do_formulario(db, user, monkeypatch, com_stripe):
+def test_desconto_de_indicacao_vale_uma_parcela_e_nao_vira_preco(db, user, monkeypatch, com_stripe):
+    """Regressão: o desconto embutido no valor virava preço recorrente.
+
+    Assinatura com `unit_amount` reduzido cobra o valor reduzido para SEMPRE.
+    Qualquer pessoa conseguia 30% permanente criando uma segunda conta pelo
+    próprio link de indicação. O desconto agora viaja separado do preço.
+    """
     indicador = User(
         name="Indicador", email="ind2@example.com",
         password_hash=hash_password("senhaforte123"), onboarding_done=True,
@@ -250,7 +256,21 @@ def test_desconto_de_indicacao_sai_do_registro_e_nao_do_formulario(db, user, mon
     service.start_checkout(db, user, plan="STUDENT", cycle="MONTHLY", base_url="https://x")
 
     cheio = int(round(billing.PLANS["STUDENT"].price_month * 100))
-    assert capturado["amount_cents"] < cheio
+    assert capturado["amount_cents"] == cheio, "o preço recorrente foi alterado"
+    assert 0 < capturado["first_invoice_discount"] < 1, "o desconto não foi repassado"
+
+
+def test_sem_indicacao_nao_ha_desconto(db, user, monkeypatch, com_stripe):
+    capturado = {}
+
+    def _falso_checkout(**kwargs):
+        capturado.update(kwargs)
+        from agenda.payments.base import CheckoutSession
+        return CheckoutSession(ok=True, url="https://x", external_id="cs_9")
+
+    monkeypatch.setattr(service.provider(), "create_checkout", _falso_checkout)
+    service.start_checkout(db, user, plan="PRO", cycle="ANNUAL", base_url="https://x")
+    assert capturado["first_invoice_discount"] == 0.0
 
 
 # --------------------------------------------------------------------------- #
@@ -288,3 +308,37 @@ def test_janela_de_reembolso_segue_o_cdc(db, user):
     db.commit()
     assert service.within_refund_window(db, user) is True
     assert config.REFUND_WINDOW_DAYS == 7
+
+
+def test_sem_gateway_a_rota_nao_concede_plano_pago(app, db, user, monkeypatch):
+    """Regressão de falha aberta.
+
+    Havia duas condições para a mesma coisa — a flag `billing_enabled` na rota
+    e `provider().configured and flag` no serviço. Quando elas discordavam
+    (flag ligada, chave ausente ou rotacionada), a execução caía no
+    `change_plan` do fim da função e concedia o plano de graça.
+    """
+    monkeypatch.setitem(config.FEATURE_FLAGS, "billing_enabled", True)
+    monkeypatch.setattr(config, "PAYMENT_PROVIDER", "none")
+    monkeypatch.setattr(config, "STRIPE_SECRET_KEY", "")
+    service.reset_provider()
+
+    cliente = app.test_client()
+    cliente.get("/entrar")
+    with cliente.session_transaction() as sessao:
+        token = sessao.get("csrf")
+    cliente.post("/entrar", data={"csrf_token": token, "email": user.email,
+                                  "password": "segredo123"})
+    with cliente.session_transaction() as sessao:
+        token = sessao.get("csrf")
+
+    resposta = cliente.post("/planos/assinar", data={
+        "csrf_token": token, "plan": "FAMILY", "cycle": "ANNUAL",
+    })
+    assert resposta.status_code == 302
+
+    db.expire_all()
+    assert billing.active_plan(db, db.get(User, user.id)).tier == PlanTier.FREE.value, (
+        "plano pago concedido sem gateway configurado"
+    )
+    service.reset_provider()

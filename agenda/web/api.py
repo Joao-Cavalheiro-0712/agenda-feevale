@@ -69,19 +69,15 @@ def capture():
                 "status": "REJECTED",
                 "message": "Leitura de documentos está temporariamente indisponível.",
             }), 503
-        pode, aviso = billing.check_quota(
-            db(), user, billing.MAX_DOCUMENT_IMPORTS, "document_imports"
-        )
-        if not pode:
-            return jsonify({"status": "QUOTA", "message": aviso, "upgrade": "/planos"}), 402
         try:
             document = pipeline.ingest(
                 db(), user, uploaded.filename, uploaded.read(),
                 mime_type=uploaded.mimetype or "",
             )
+        except billing.QuotaExceeded as exc:
+            return jsonify({"status": "QUOTA", "message": exc.message, "upgrade": "/planos"}), 402
         except pipeline.UploadError as exc:
             return jsonify({"status": "REJECTED", "message": str(exc)}), 400
-        billing.consume(db(), user, "document_imports")
         return jsonify(
             {
                 "status": "DOCUMENT",
@@ -137,11 +133,15 @@ def capture():
                 {"status": "REJECTED", "message": "Não consegui entender o áudio. Tente de novo."}
             ), 200
         record_usage(db(), user_id=user.id, operation="transcribe", result=result)
-        billing.consume(db(), user, "ai_messages")
         billing.consume(db(), user, "audio_minutes", amount=minutos)
-        response = assistant.handle_message(
-            db(), user, result.text, channel="web", source_type=SourceType.VOICE.value
-        )
+        try:
+            response = assistant.handle_message(
+                db(), user, result.text, channel="web", source_type=SourceType.VOICE.value
+            )
+        except billing.QuotaExceeded as exc:
+            return jsonify(
+                {"status": "QUOTA", "message": exc.message, "upgrade": "/planos"}
+            ), 402
         response["transcript"] = result.text
         return jsonify(response)
 
@@ -150,15 +150,14 @@ def capture():
     if not text:
         return jsonify({"status": "REJECTED", "message": "Escreva ou grave alguma coisa."}), 400
 
-    pode, aviso = billing.check_quota(db(), user, billing.MAX_AI_MESSAGES, "ai_messages")
-    if not pode:
-        return jsonify({"status": "QUOTA", "message": aviso, "upgrade": "/planos"}), 402
-    billing.consume(db(), user, "ai_messages")
-    return jsonify(
-        assistant.handle_message(
-            db(), user, text, channel="web", source_type=SourceType.WEB_CAPTURE.value
+    try:
+        return jsonify(
+            assistant.handle_message(
+                db(), user, text, channel="web", source_type=SourceType.WEB_CAPTURE.value
+            )
         )
-    )
+    except billing.QuotaExceeded as exc:
+        return jsonify({"status": "QUOTA", "message": exc.message, "upgrade": "/planos"}), 402
 
 
 @bp.post("/onboarding/voice")
@@ -186,7 +185,10 @@ def onboarding_voice():
     if not texto:
         return jsonify({"ok": False, "reason": "Não consegui entender o áudio."}), 200
 
-    return jsonify(onboarding_ai.interpret(db(), user, texto))
+    try:
+        return jsonify(onboarding_ai.interpret(db(), user, texto))
+    except billing.QuotaExceeded as exc:
+        return jsonify({"ok": False, "reason": exc.message, "upgrade": "/planos"}), 402
 
 
 @bp.post("/assistant/message")
@@ -198,15 +200,14 @@ def assistant_message():
     text = (payload.get("text") or "").strip()[:4000]
     if not text:
         return jsonify({"error": "Mensagem vazia."}), 400
-    pode, aviso = billing.check_quota(db(), user, billing.MAX_AI_MESSAGES, "ai_messages")
-    if not pode:
-        return jsonify({"status": "QUOTA", "message": aviso, "upgrade": "/planos"}), 402
-    billing.consume(db(), user, "ai_messages")
-    return jsonify(
-        assistant.handle_message(
-            db(), user, text, channel="web", source_type=SourceType.WEB_CAPTURE.value
+    try:
+        return jsonify(
+            assistant.handle_message(
+                db(), user, text, channel="web", source_type=SourceType.WEB_CAPTURE.value
+            )
         )
-    )
+    except billing.QuotaExceeded as exc:
+        return jsonify({"status": "QUOTA", "message": exc.message, "upgrade": "/planos"}), 402
 
 
 @bp.post("/actions/<action_id>/confirm")
@@ -468,7 +469,7 @@ def push_subscribe():
 
     payload = request.get_json(silent=True) or {}
     endpoint = (payload.get("endpoint") or "").strip()
-    if not endpoint.startswith("https://") or len(endpoint) > 800:
+    if not push.endpoint_permitido(endpoint):
         return jsonify({"error": "endpoint inválido"}), 400
     keys = payload.get("keys")
     if keys is not None and not isinstance(keys, dict):

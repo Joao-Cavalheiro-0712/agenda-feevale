@@ -509,6 +509,9 @@ def upload_documents():
                 db(), user, uploaded.filename, uploaded.read(),
                 mime_type=uploaded.mimetype or "",
             )
+        except billing.QuotaExceeded as exc:
+            flash(exc.message, "error")
+            break
         except pipeline.UploadError as exc:
             flash(str(exc), "error")
     if last is not None and len(files) == 1:
@@ -545,12 +548,26 @@ def import_document(document_id: str):
         if item.id in selected:
             for field in ("title", "date", "type", "subject_name"):
                 value = request.form.get(f"{field}_{item.id}")
-                if value:
-                    payload = dict(item.payload or {})
-                    payload[field] = value
-                    if field == "subject_name":
-                        payload.pop("subject_id", None)
-                    item.payload = payload
+                if not value:
+                    continue
+                # O que a pessoa corrige na revisão é texto livre, e ia direto
+                # para o payload — inclusive o TIPO, que é enum, e a DATA. Tipo
+                # inválido virava injeção de linha no .ics de quem assina o
+                # calendário; data inválida virava evento sem data.
+                if field == "type" and value not in {t.value for t in EventType}:
+                    continue
+                if field == "date":
+                    try:
+                        dt.date.fromisoformat(value[:10])
+                    except ValueError:
+                        continue
+                if len(value) > 300:
+                    value = value[:300]
+                payload = dict(item.payload or {})
+                payload[field] = value
+                if field == "subject_name":
+                    payload.pop("subject_id", None)
+                item.payload = payload
     created = pipeline.confirm(db(), user, document, selected_ids=selected)
     flash(
         f"Importado: {created['events']} atividades, {created['subjects']} matérias, "
@@ -711,7 +728,7 @@ def share_view(code: str):
     collection = db().scalars(
         select(SharedCollection).where(SharedCollection.code == code.upper())
     ).first()
-    if collection is None or not collection.active:
+    if collection is None or not collection.active or not _dono_ativo(collection.owner_id):
         abort(404)
     return render_template(
         "share.html",
@@ -719,6 +736,20 @@ def share_view(code: str):
         snapshot=collection.snapshot,
         logged_in=current_user() is not None,
     )
+
+
+def _dono_ativo(owner_id: str) -> bool:
+    """Se o dono de um link público ainda pode publicar conteúdo.
+
+    Links públicos (coleção compartilhada, feed de calendário) não passam pela
+    trava de consentimento do `before_request`, porque não têm sessão. Sem esta
+    checagem, a conta de um menor pausada por falta de autorização do
+    responsável continuaria distribuindo conteúdo pela porta dos fundos.
+    """
+    dono = db().get(User, owner_id)
+    if dono is None or dono.deleted_at is not None:
+        return False
+    return privacy.blocked_reason(db(), dono) is None
 
 
 @bp.route("/join/<code>", methods=["POST"])
@@ -730,7 +761,7 @@ def share_accept(code: str):
     collection = db().scalars(
         select(SharedCollection).where(SharedCollection.code == code.upper())
     ).first()
-    if collection is None or not collection.active:
+    if collection is None or not collection.active or not _dono_ativo(collection.owner_id):
         abort(404)
     context = _context()
     if context is None:
@@ -1040,21 +1071,27 @@ def subscribe_plan():
         return redirect(url_for("pages.plans_page"))
     if ciclo not in {c.value for c in BillingCycle}:
         ciclo = BillingCycle.MONTHLY.value
-    if not config.flag("billing_enabled") and plano != PlanTier.FREE.value:
+    # Uma condição só, e ela é a do serviço de pagamento. Antes havia duas —
+    # a flag aqui e `pagamentos.enabled()` (flag E provedor configurado) mais
+    # abaixo — e quando elas discordavam (flag ligada, chave ausente ou
+    # rotacionada) a execução caía no `change_plan` do fim da função e
+    # concedia o plano de graça. Regra de ouro: sem gateway pronto, nenhum
+    # plano pago é concedido por esta rota, em ambiente nenhum.
+    from agenda.payments import service as pagamentos
+
+    if plano != PlanTier.FREE.value and not pagamentos.enabled():
         flash(
             "A cobrança ainda não está ligada neste ambiente. "
             "Configure o gateway para aceitar pagamentos.",
             "error",
         )
         return redirect(url_for("pages.plans_page"))
-    from agenda.core import referrals
-    from agenda.payments import service as pagamentos
 
     user = current_user()
 
     # Com gateway ligado, o plano NÃO muda aqui: quem muda é o webhook, depois
     # do dinheiro entrar. Esta rota só leva a pessoa para o checkout.
-    if pagamentos.enabled():
+    if plano != PlanTier.FREE.value:
         try:
             sessao = pagamentos.start_checkout(
                 db(), user, plan=plano, cycle=ciclo,
@@ -1068,15 +1105,8 @@ def subscribe_plan():
             return redirect(url_for("pages.plans_page"))
         return redirect(sessao.url)
 
-    billing.change_plan(db(), user, plano, cycle=ciclo)
-    if plano != PlanTier.FREE.value:
-        # A indicação entra em carência agora; a recompensa de quem indicou só
-        # nasce depois da janela de reembolso (ver core/referrals.py).
-        referrals.mark_paid(db(), user)
-        # Crédito que a pessoa já tinha a receber entra na hora que ela assina.
-        meses = referrals.apply_credits(db(), user)
-        if meses:
-            flash(f"Apliquei {meses} mês(es) grátis das suas indicações.", "success")
+    # Só sobra o caminho de VOLTAR para o grátis, que não envolve dinheiro.
+    billing.change_plan(db(), user, PlanTier.FREE.value, cycle=ciclo)
     flash("Plano atualizado.", "success")
     return redirect(url_for("pages.plans_page"))
 
@@ -1503,6 +1533,12 @@ def calendar_feed(token: str):
         abort(404)
     dono = db().get(User, linha.user_id)
     if dono is None or dono.deleted_at is not None:
+        abort(404)
+    # O feed é anônimo (autenticado só pelo token), então ele NÃO passa pela
+    # trava de consentimento do before_request — que só age sobre sessão. Sem
+    # esta checagem, a agenda de um menor sem autorização do responsável
+    # continuaria saindo por aqui mesmo com a conta pausada.
+    if privacy.blocked_reason(db(), dono) is not None:
         abort(404)
 
     corpo = calendar_export.build_calendar(db(), dono, app_name=config.APP_NAME)

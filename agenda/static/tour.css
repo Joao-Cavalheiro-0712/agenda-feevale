@@ -1,0 +1,167 @@
+/* ---------------------------------------------------------------------------
+   Tour de primeiro acesso
+
+   Três decisões que governam este arquivo:
+
+   1. A animação conta a HISTÓRIA, não decora a tela. Cada cena mostra uma
+      transformação (bagunça → organizado), porque é isso que a pessoa precisa
+      entender em dois segundos. Movimento sem significado é só atraso.
+
+   2. `prefers-reduced-motion` não é enfeite de acessibilidade: parte do
+      público tem enxaqueca vestibular, e uma tela que se mexe sozinha no
+      primeiro acesso é motivo de desinstalar. Com a preferência ligada, tudo
+      aparece no estado final, sem transição.
+
+   3. Nada aqui pode segurar quem quer usar o app. O "Pular" tem o mesmo peso
+      visual do "Avançar" e fica no alcance do polegar.
+   --------------------------------------------------------------------------- */
+
+.tour {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; grid-template-rows: auto 1fr auto;
+  background: var(--paper);
+  overscroll-behavior: contain;
+}
+
+/* Barra de progresso: traços, não bolinhas. Traço mostra quanto falta. */
+.tour-progresso {
+  display: flex; gap: 4px; padding: var(--s5) var(--s5) 0;
+  padding-top: max(var(--s5), env(safe-area-inset-top));
+}
+.tour-progresso span {
+  flex: 1; height: 3px; border-radius: 2px; background: var(--rule);
+  overflow: hidden; position: relative;
+}
+.tour-progresso span::after {
+  content: ""; position: absolute; inset: 0; transform: scaleX(0);
+  transform-origin: left; background: var(--ink);
+  transition: transform .5s cubic-bezier(.32,.72,0,1);
+}
+.tour-progresso span.visto::after { transform: scaleX(1); }
+.tour-progresso span.atual::after { transform: scaleX(1); background: var(--grifo-forte, var(--ink)); }
+
+.tour-palco {
+  display: grid; place-items: center; padding: var(--s4) var(--s5);
+  overflow: hidden;
+}
+
+.tour-cena { display: none; width: 100%; max-width: 420px; text-align: left; }
+.tour-cena.ativa { display: block; }
+
+/* A entrada de cada cena: o texto sobe um pouco depois da arte, para o olho
+   pousar primeiro na ilustração e depois ler. */
+.tour-cena.ativa .tour-arte { animation: tour-arte-entra .55s cubic-bezier(.22,1,.36,1) both; }
+.tour-cena.ativa .tour-texto > * { animation: tour-sobe .5s cubic-bezier(.22,1,.36,1) both; }
+.tour-cena.ativa .tour-texto > :nth-child(1) { animation-delay: .10s; }
+.tour-cena.ativa .tour-texto > :nth-child(2) { animation-delay: .16s; }
+.tour-cena.ativa .tour-texto > :nth-child(3) { animation-delay: .22s; }
+.tour-cena.ativa .tour-texto > :nth-child(4) { animation-delay: .28s; }
+
+@keyframes tour-arte-entra {
+  from { opacity: 0; transform: scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes tour-sobe {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.tour-arte {
+  width: 100%; aspect-ratio: 4 / 3; margin-bottom: var(--s5);
+  display: grid; place-items: center;
+}
+.tour-arte svg { width: 100%; height: 100%; overflow: visible; }
+
+.tour-kicker {
+  font-family: var(--font-ui); font-size: .68rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-4); margin: 0 0 var(--s2);
+}
+.tour-titulo {
+  font-family: var(--font-display); font-size: clamp(1.6rem, 7vw, 2.1rem);
+  line-height: 1.12; letter-spacing: -.02em; margin: 0 0 var(--s3);
+}
+.tour-corpo { font-size: .96rem; line-height: 1.6; color: var(--ink-2); margin: 0 0 var(--s3); }
+.tour-dica {
+  font-size: .84rem; line-height: 1.5; color: var(--ink-4);
+  border-left: 2px solid var(--grifo); padding-left: var(--s3); margin: 0;
+}
+.tour-antesdepois { display: grid; gap: var(--s2); margin: 0 0 var(--s3); }
+.tour-antesdepois p { margin: 0; font-size: .86rem; line-height: 1.5; }
+.tour-antesdepois .antes { color: var(--ink-4); }
+.tour-antesdepois .depois { color: var(--ink); font-weight: 600; }
+
+.tour-acoes {
+  display: flex; gap: var(--s3); align-items: center;
+  padding: var(--s4) var(--s5);
+  padding-bottom: max(var(--s5), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--rule);
+}
+.tour-acoes .btn { flex: 1; }
+.tour-pular {
+  background: none; border: 0; cursor: pointer; padding: 12px var(--s3);
+  font-size: .88rem; color: var(--ink-4); min-height: 44px;
+  font-family: inherit;
+}
+.tour-pular:hover { color: var(--ink); }
+
+/* --------------------------------------------------------------------------
+   As ilustrações
+   -------------------------------------------------------------------------- */
+.tour-cena.ativa .desenha {
+  stroke-dasharray: var(--traco, 400); stroke-dashoffset: var(--traco, 400);
+  animation: tour-desenha 1.1s cubic-bezier(.65,0,.35,1) forwards;
+}
+@keyframes tour-desenha { to { stroke-dashoffset: 0; } }
+
+.tour-cena.ativa .surge { animation: tour-surge .5s cubic-bezier(.22,1,.36,1) both; }
+@keyframes tour-surge {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.tour-cena.ativa .flutua { animation: tour-flutua 3.2s ease-in-out infinite; }
+@keyframes tour-flutua {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
+
+.tour-cena.ativa .pulsa { animation: tour-pulsa 1.9s ease-in-out infinite; transform-origin: center; }
+@keyframes tour-pulsa {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
+
+/* Onda de voz: cada barra com o próprio ritmo, senão parece um gráfico. */
+.tour-cena.ativa .onda rect { animation: tour-onda 1.15s ease-in-out infinite; transform-origin: center; }
+@keyframes tour-onda {
+  0%, 100% { transform: scaleY(.35); }
+  50%      { transform: scaleY(1); }
+}
+
+/* O traço de marca-texto passando por cima — o gesto que dá nome ao produto. */
+.tour-cena.ativa .grifada {
+  transform-origin: left center;
+  animation: tour-grifa .7s cubic-bezier(.65,0,.35,1) .55s both;
+}
+@keyframes tour-grifa { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* Atrasos escalonados, nomeados pelo que representam e não por número. */
+.d1 { animation-delay: .10s !important; }
+.d2 { animation-delay: .22s !important; }
+.d3 { animation-delay: .34s !important; }
+.d4 { animation-delay: .46s !important; }
+.d5 { animation-delay: .58s !important; }
+.d6 { animation-delay: .70s !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-cena.ativa *,
+  .tour-progresso span::after {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+    opacity: 1 !important;
+  }
+  .tour-progresso span.visto::after,
+  .tour-progresso span.atual::after { transform: scaleX(1) !important; }
+}

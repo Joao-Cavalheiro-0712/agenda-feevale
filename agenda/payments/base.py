@@ -8,10 +8,13 @@ Regras que valem para QUALQUER provedor que entre aqui:
 2. **Plano só muda por confirmação do servidor.** Nem redirect de sucesso, nem
    JavaScript, nem "voltei da tela de pagamento" liberam nada — só o webhook
    assinado ou uma consulta nossa ao gateway.
-3. **Todo webhook é assinado, datado e idempotente.** Assinatura para provar a
+3. **Desconto não é preço.** Promoção vale um ciclo e viaja como desconto de
+   parcela. Reduzir o `unit_amount` de uma assinatura cria um preço recorrente
+   menor — o desconto de boas-vindas passaria a valer para sempre.
+4. **Todo webhook é assinado, datado e idempotente.** Assinatura para provar a
    origem, data para barrar replay, idempotência porque gateway reenvia o mesmo
    evento — e processar duas vezes é conceder dois meses.
-4. **Falhar fechado.** Sem chave configurada, o checkout não finge que
+5. **Falhar fechado.** Sem chave configurada, o checkout não finge que
    funcionou: ele diz que a cobrança não está ligada.
 """
 from __future__ import annotations
@@ -78,8 +81,14 @@ class PaymentProvider:
 
     def create_checkout(
         self, *, user, plan: str, cycle: str, amount_cents: int,
-        success_url: str, cancel_url: str,
+        success_url: str, cancel_url: str, first_invoice_discount: float = 0.0,
     ) -> CheckoutSession:
+        """`first_invoice_discount` é fração (0.30 = 30%) e vale UMA parcela.
+
+        Ele viaja separado do preço de propósito: desconto embutido no valor de
+        uma assinatura vira preço recorrente, e um desconto de boas-vindas que
+        nunca acaba é receita perdida para sempre.
+        """
         raise NotImplementedError
 
     def verify_webhook(self, body: bytes, headers) -> WebhookEvent | None:

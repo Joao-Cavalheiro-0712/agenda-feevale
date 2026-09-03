@@ -10,6 +10,8 @@ from __future__ import annotations
 import base64
 import json
 
+import requests
+
 from sqlalchemy.orm import Session
 
 from agenda import config
@@ -43,6 +45,38 @@ def _b64(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
 
+# Serviços de push dos navegadores. É uma lista curta e estável porque só
+# existem quatro fabricantes de navegador — o que torna a allowlist a defesa
+# certa aqui, e não uma manutenção eterna.
+_PUSH_HOSTS_SUFIXOS = (
+    ".googleapis.com",            # Chrome, Edge, Opera (FCM)
+    ".push.services.mozilla.com",  # Firefox
+    ".notify.windows.com",         # Windows / Edge legado
+    ".push.apple.com",             # Safari
+)
+
+
+def endpoint_permitido(endpoint: str) -> bool:
+    """Se este endereço de push pode ser aceito.
+
+    O endereço vem do navegador do usuário, mas quem o envia para nós é código
+    do cliente — ou seja, é dado não confiável que o SERVIDOR vai buscar depois.
+    Sem allowlist, qualquer pessoa cadastra `https://algo.interno:8443/x` e
+    passa a usar os nossos lembretes para bater em serviços internos.
+    """
+    from urllib.parse import urlparse
+
+    if not endpoint or len(endpoint) > 800:
+        return False
+    partes = urlparse(endpoint)
+    if partes.scheme != "https" or partes.port not in (None, 443):
+        return False
+    host = (partes.hostname or "").lower()
+    if not host:
+        return False
+    return any(host == s.lstrip(".") or host.endswith(s) for s in _PUSH_HOSTS_SUFIXOS)
+
+
 def subscriptions_of(db: Session, user: User) -> list[PushSubscription]:
     return list(db.scalars(scope.query(PushSubscription, user.id)).all())
 
@@ -63,6 +97,11 @@ def send(db: Session, user: User, *, title: str, body: str, url: str = "/hoje") 
 
     enviados = 0
     payload = json.dumps({"title": title, "body": body, "url": url})
+    # Sem redirecionamento: o endereço do push é dado do usuário, e seguir um
+    # 307 para http://169.254.169.254 transformaria o nosso servidor em
+    # ferramenta de varredura da rede interna.
+    sessao = requests.Session()
+    sessao.max_redirects = 0
     for inscricao in subscriptions_of(db, user):
         try:
             webpush(
@@ -71,6 +110,7 @@ def send(db: Session, user: User, *, title: str, body: str, url: str = "/hoje") 
                 vapid_private_key=config.VAPID_PRIVATE_KEY,
                 vapid_claims={"sub": f"mailto:{config.VAPID_CONTACT}"},
                 timeout=10,
+                requests_session=sessao,
             )
             enviados += 1
         except WebPushException as exc:  # pragma: no cover - depende de rede

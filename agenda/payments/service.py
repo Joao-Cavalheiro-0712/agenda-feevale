@@ -75,17 +75,18 @@ def start_checkout(db: Session, user: User, *, plan: str, cycle: str, base_url: 
         cycle = BillingCycle.MONTHLY.value
 
     plano = billing.PLANS[plan]
-    valor = plano.price_for(cycle)
+    centavos = int(round(plano.price_for(cycle) * 100))
 
-    # Desconto de boas-vindas de quem chegou por indicação, aplicado no
-    # servidor a partir do registro de indicação — nunca de um campo do form.
+    # O desconto de boas-vindas vale para a PRIMEIRA cobrança e viaja separado
+    # do preço. Embutir a redução no valor recorrente faria o assinante pagar
+    # 30% a menos para sempre — uma perda permanente de receita que qualquer
+    # pessoa consegue sozinha, criando uma segunda conta pelo próprio link.
+    # O provedor aplica isso como desconto de uma parcela, não como preço.
     desconto = referrals.invitee_discount_available(db, user)
-    if desconto:
-        valor = round(valor * (1 - desconto), 2)
 
-    centavos = int(round(valor * 100))
     sessao = provider().create_checkout(
         user=user, plan=plan, cycle=cycle, amount_cents=centavos,
+        first_invoice_discount=desconto,
         success_url=f"{base_url}/planos?pago=1",
         cancel_url=f"{base_url}/planos",
     )

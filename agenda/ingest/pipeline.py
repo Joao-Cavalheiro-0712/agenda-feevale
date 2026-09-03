@@ -143,7 +143,15 @@ def ingest(
     Em produção o processamento pesado roda em worker (``jobs.queue``); aqui a
     função é idempotente por hash: reenviar o mesmo arquivo reaproveita a
     extração (SPEC §114).
+
+    A quota de documentos é cobrada AQUI, e não no chamador: a rota de API
+    cobrava e a rota de formulário não, então o limite de 3 documentos do plano
+    grátis era inaplicável por um caminho que existia o tempo todo. Regra
+    geral: quem gasta é quem cobra.
     """
+    from agenda.core import billing
+
+    billing.enforce(db, user, billing.MAX_DOCUMENT_IMPORTS, "document_imports")
     validate_upload(filename, data)
     digest = hashlib.sha256(data).hexdigest()
 
@@ -155,8 +163,11 @@ def ingest(
         )
     ).first()
     if existing is not None:
+        # Reenviar o mesmo arquivo não custa quota de novo: é o mesmo trabalho,
+        # já feito, e cobrar duas vezes puniria quem só tocou no botão errado.
         return existing
 
+    billing.consume(db, user, "document_imports")
     document = Document(
         user_id=user.id,
         filename=filename[:300],

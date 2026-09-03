@@ -313,3 +313,58 @@ def test_indicacao_de_outra_pessoa_nao_aparece_no_meu_painel(db, user):
 
     assert referrals.summary(db, user)["convidados"] == 0
     assert referrals.summary(db, outro)["convidados"] == 1
+
+
+def test_estorno_revoga_recompensa_ja_aplicada(db, user):
+    """Regressão: a carência é de 8 dias e o chargeback vem meses depois.
+
+    Filtrar só recompensas não aplicadas deixava o golpe passar inteiro —
+    quando o estorno chegava, o crédito já tinha virado tempo de assinatura e
+    ficava invisível para a revogação.
+    """
+    codigo = referrals.code_for(db, user)
+    convidados = []
+    for i in range(referrals.REFERRAL_GOAL):
+        convidado = _pessoa(db, f"pagante{i}@example.com")
+        referrals.attribute(db, convidado, codigo)
+        _assinar(db, convidado)
+        convidados.append(convidado)
+    db.commit()
+    referrals.run_qualification(
+        db, now=dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=9)
+    )
+    db.commit()
+
+    # Quem indicou assina e o crédito é APLICADO no período dele.
+    billing.change_plan(db, user, PlanTier.STUDENT.value)
+    db.commit()
+    assert referrals.apply_credits(db, user) == 1
+    db.commit()
+    com_bonus = billing.subscription_of(db, user).current_period_end
+
+    # Meses depois, o indicado contesta a cobrança.
+    referrals.revoke_for(db, convidados[0], reason="charge.dispute.created")
+    db.commit()
+
+    credito = db.query(Reward).filter_by(user_id=user.id).first()
+    assert credito.revoked_at is not None, "recompensa aplicada não foi revogada"
+    sem_bonus = billing.subscription_of(db, user).current_period_end
+    assert sem_bonus < com_bonus, "o tempo concedido pela indicação não foi devolvido"
+
+
+def test_devolver_tempo_nunca_corta_o_que_a_pessoa_pagou(db, user):
+    """Revogar a indicação não pode encurtar o período que ela mesma comprou."""
+    db.add(Reward(user_id=user.id, months=1, reason="teste"))
+    billing.change_plan(db, user, PlanTier.STUDENT.value)
+    db.commit()
+    referrals.apply_credits(db, user)
+    db.commit()
+
+    referrals._devolver_tempo(
+        db, user.id, meses=99, agora=dt.datetime.now(dt.timezone.utc)
+    )
+    db.commit()
+    fim = billing.subscription_of(db, user).current_period_end
+    if fim.tzinfo is None:
+        fim = fim.replace(tzinfo=dt.timezone.utc)
+    assert fim >= dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)

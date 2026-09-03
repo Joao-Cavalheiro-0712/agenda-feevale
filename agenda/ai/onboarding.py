@@ -41,7 +41,16 @@ def transcribe(db: Session, user: User, audio: bytes, mime_type: str) -> str:
 
 
 def interpret(db: Session, user: User, transcript: str) -> dict:
-    """Transcrição → estrutura revisável. Sem IA, devolve vazio com aviso."""
+    """Transcrição → estrutura revisável. Sem IA, devolve vazio com aviso.
+
+    Cobra quota de mensagem: esta função chama o modelo FORTE, e a rota que a
+    expõe (`/api/onboarding/voice` com o campo `text`) continua aberta depois
+    do onboarding terminar. Sem cobrança, ela era o caminho mais barato para
+    usar o modelo caro de graça, para sempre.
+    """
+    from agenda.core import billing
+
+    billing.enforce(db, user, billing.MAX_AI_MESSAGES, "ai_messages")
     if not transcript.strip():
         return {"ok": False, "reason": "Não entendi o áudio.", "subjects": []}
     if not ai_available():
@@ -59,6 +68,7 @@ def interpret(db: Session, user: User, transcript: str) -> dict:
     if not resultado.ok or not isinstance(resultado.data, dict):
         return {"ok": False, "reason": "Não consegui organizar o que você falou.", "subjects": []}
     record_usage(db, user_id=user.id, operation="onboarding_interpret", result=resultado)
+    billing.consume(db, user, "ai_messages")
 
     dados = resultado.data
     tipo = str(dados.get("education_type") or EducationType.UNDERGRAD.value)

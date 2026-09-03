@@ -276,6 +276,7 @@ def _transcribe(db: Session, user: User, message: ChannelMessage) -> str:
 
 
 def _handle_media(db: Session, user: User, message: ChannelMessage) -> str:
+    from agenda.core import billing
     from agenda.ingest import pipeline
 
     raw = message.raw or {}
@@ -294,6 +295,10 @@ def _handle_media(db: Session, user: User, message: ChannelMessage) -> str:
             source_channel=SourceType.WHATSAPP.value,
             mime_type=media.get("mime_type", ""),
         )
+    except billing.QuotaExceeded as exc:
+        message.status = "QUOTA"
+        send_text(db, user, exc.message)
+        return exc.message
     except pipeline.UploadError as exc:
         message.status = "FAILED"
         send_text(db, user, str(exc))
@@ -439,11 +444,21 @@ def download_media(media_id: str) -> bytes:
 # --------------------------------------------------------------------------- #
 # Vinculação de conta (SPEC §17)
 # --------------------------------------------------------------------------- #
+CHANNEL_LINK_PURPOSE = "channel_link"
+# "whatsapp_link" continua aceito enquanto os tokens antigos (30 min de vida)
+# não expiram. Depois disso a lista pode encolher para um item.
+CHANNEL_LINK_PURPOSES = (CHANNEL_LINK_PURPOSE, "whatsapp_link")
+
+
 def create_link_token(db: Session, user: User, *, ttl_minutes: int = 30) -> LinkToken:
     token = LinkToken(
         user_id=user.id,
         token=secrets.token_urlsafe(9)[:12].upper(),
-        purpose="whatsapp_link",
+        # Um único código serve WhatsApp e Telegram — é assim que a tela de
+        # conectar funciona. O propósito diz isso de forma honesta, e é ele
+        # que impede um token de OUTRA finalidade (calendário, por exemplo)
+        # de ser resgatado como vínculo de canal.
+        purpose=CHANNEL_LINK_PURPOSE,
         expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=ttl_minutes),
     )
     db.add(token)
@@ -461,7 +476,10 @@ def consume_link_token(db: Session, raw_token: str, phone_e164: str) -> User | N
     """Valida o token e grava o vínculo. Token é de uso único."""
     now = dt.datetime.now(dt.timezone.utc)
     token = db.scalars(
-        select(LinkToken).where(LinkToken.token == raw_token.strip().upper())
+        select(LinkToken).where(
+            LinkToken.token == raw_token.strip().upper(),
+            LinkToken.purpose.in_(CHANNEL_LINK_PURPOSES),
+        )
     ).first()
     if token is None or token.used_at is not None:
         return None

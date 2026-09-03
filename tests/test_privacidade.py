@@ -414,3 +414,56 @@ def test_admin_marca_conta_como_de_menor_e_ela_trava(app, db, user):
     # A sessão do titular foi encerrada e a conta responde travada.
     dele = _entrar(app, "joao@example.com", "segredo123")
     assert dele.get("/hoje").status_code == 403
+
+
+# --------------------------------------------------------------------------- #
+# Links públicos não são porta dos fundos da trava de consentimento
+# --------------------------------------------------------------------------- #
+def test_conta_pausada_para_de_servir_o_feed_de_calendario(app, db, client, user):
+    """O feed é anônimo, então não passa pelo before_request.
+
+    Sem checagem própria, a agenda de um menor sem autorização do responsável
+    continuaria saindo por aqui com a conta pausada.
+    """
+    from agenda.models import LinkToken
+
+    resposta = client.post("/calendario/assinar", data={"csrf_token": _csrf(client)})
+    assert resposta.status_code == 302
+    db.expire_all()
+    linha = db.query(LinkToken).filter_by(user_id=user.id, purpose="calendar").first()
+    if linha is None:
+        pytest.skip("assinatura de calendário indisponível neste plano")
+
+    anonimo = app.test_client()
+    assert anonimo.get(f"/calendario/{linha.token}.ics").status_code == 200
+
+    # Conta vira de menor sem autorização: o feed tem de fechar junto.
+    user.is_minor = True
+    user.guardian_consent_at = None
+    db.commit()
+    assert anonimo.get(f"/calendario/{linha.token}.ics").status_code == 404
+
+
+def test_conta_pausada_para_de_servir_o_link_compartilhado(app, db, client, user):
+    from agenda.core import academic
+    from agenda.models import SharedCollection
+
+    contexto = academic.active_context(db, user.id)
+    materia = academic.upsert_subject(db, user.id, contexto.id, "História")
+    db.commit()
+
+    resposta = client.post(f"/materias/{materia.id}/compartilhar",
+                           data={"csrf_token": _csrf(client)})
+    assert resposta.status_code == 302
+    db.expire_all()
+    colecao = db.query(SharedCollection).filter_by(owner_id=user.id).first()
+    if colecao is None:
+        pytest.skip("compartilhamento indisponível neste plano")
+
+    anonimo = app.test_client()
+    assert anonimo.get(f"/join/{colecao.code}").status_code == 200
+
+    user.is_minor = True
+    user.guardian_consent_at = None
+    db.commit()
+    assert anonimo.get(f"/join/{colecao.code}").status_code == 404

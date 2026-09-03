@@ -59,7 +59,7 @@ class StripeProvider(PaymentProvider):
     # ----------------------------------------------------------------- #
     def create_checkout(
         self, *, user, plan: str, cycle: str, amount_cents: int,
-        success_url: str, cancel_url: str,
+        success_url: str, cancel_url: str, first_invoice_discount: float = 0.0,
     ) -> CheckoutSession:
         if not self.configured:
             return CheckoutSession(ok=False, message="Gateway não configurado.")
@@ -87,6 +87,14 @@ class StripeProvider(PaymentProvider):
             ),
             "line_items[0][price_data][product_data][name]": f"{config.APP_NAME} {plan}",
         }
+        if first_invoice_discount > 0:
+            # Cupom de UMA parcela ("duration": "once"): o preço recorrente
+            # continua o de tabela, e a promoção não vira desconto eterno.
+            dados.update({
+                "discounts[0][coupon_data][percent_off]": f"{first_invoice_discount * 100:.0f}",
+                "discounts[0][coupon_data][duration]": "once",
+                "discounts[0][coupon_data][name]": "Boas-vindas por indicação",
+            })
         try:
             resposta = requests.post(
                 "https://api.stripe.com/v1/checkout/sessions",

@@ -16,7 +16,11 @@ from agenda.core import recurrence, scope
 from agenda.core.events import tz_of
 from agenda.models import Event, EventStatus, User
 
-_ESCAPE = str.maketrans({",": r"\,", ";": r"\;", "\\": "\\\\", "\n": r"\n"})
+# Escapa o que o formato exige E remove todo caractere de controle. O CR era o
+# furo: sem ele na tabela, um título com "\r" emitia uma quebra de linha crua
+# dentro de SUMMARY, e o parser do calendário passava a ler a linha seguinte
+# como um campo novo — texto e link plantados na agenda de quem assinou o feed.
+_ESCAPE = str.maketrans({",": r"\,", ";": r"\;", "\\": "\\\\", "\n": r"\n", "\r": ""})
 
 STATUS_MAP = {
     EventStatus.CANCELLED.value: "CANCELLED",
@@ -74,7 +78,8 @@ def event_to_ics(event: Event, tz: ZoneInfo, *, subject_name: str = "") -> list[
     if event.location is not None:
         linhas.append(_line("LOCATION", _escape(event.location.label)))
     linhas.append(_line("STATUS", STATUS_MAP.get(event.status, "CONFIRMED")))
-    linhas.append(_line("CATEGORIES", event.type))
+    # Escapado como todo o resto: era o único campo de texto que saía cru.
+    linhas.append(_line("CATEGORIES", _escape(event.type)))
     linhas.append("END:VEVENT")
     return linhas
 

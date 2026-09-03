@@ -29,11 +29,23 @@ def handle_message(
         _record(db, user, "assistant", result.message, channel, result.as_dict())
         return result.as_dict()
 
+    # Quota de IA cobrada AQUI, no serviço, e não em cada rota: web, WhatsApp,
+    # Telegram e onboarding chamam este mesmo ponto, e três deles não cobravam
+    # nada. Quem gasta é quem cobra.
+    from agenda.core import billing
+
+    billing.enforce(db, user, billing.MAX_AI_MESSAGES, "ai_messages")
+
     _record(db, user, "user", text, channel, None)
 
     interpretation = interpret(
         db, user, text, channel=channel, source_type=source_type, source_id=source_id
     )
+    # Consome só quando o modelo externo foi realmente chamado. A base de
+    # conhecimento local resolve a maior parte das mensagens de graça, e
+    # cobrar quota por algo que não custou nada seria roubar do plano.
+    if interpretation.used_ai:
+        billing.consume(db, user, "ai_messages")
     proposals = interpretation.proposals
     if not proposals:
         reply = interpretation.reply or _pergunta_util(db, user, text)

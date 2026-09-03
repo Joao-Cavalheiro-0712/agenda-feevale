@@ -112,6 +112,57 @@ Assinatura HMAC-SHA256 comparada com `compare_digest`. Em produção, sem
 `WHATSAPP_APP_SECRET` configurado a requisição é **recusada** — não existe
 modo permissivo em produção. Idempotência por `provider_message_id`.
 
+## Dinheiro: cobrança e indicação
+
+O endpoint de webhook de pagamento é o ponto onde dinheiro vira permissão. Se
+ele cair, qualquer pessoa com um `curl` vira assinante Família de graça. Quatro
+regras o protegem, e cada uma tem teste de ataque em `tests/test_pagamento.py`:
+
+1. **O preço nunca vem do cliente.** O navegador escolhe plano e ciclo; quanto
+   isso custa sai de `billing.PLANS`, no servidor. O desconto de indicação
+   também sai do registro de indicação, nunca de um campo do formulário.
+2. **Plano só muda por confirmação do servidor.** Com gateway ligado,
+   `/planos/assinar` não altera nada: redireciona para o checkout. Quem muda o
+   plano é o webhook, depois de o dinheiro entrar.
+3. **Assinatura, data e idempotência.** HMAC-SHA256 com `compare_digest` —
+   comparar com `==` vaza o prefixo correto por diferença de tempo. Janela de
+   5 minutos contra replay de evento capturado. Chave única no id do evento no
+   banco: o gateway reenvia quando não recebe 200, e reprocessar um
+   `subscription.paid` concederia dois períodos.
+4. **Falha fechado e cala a boca.** Sem chave, o checkout diz que a cobrança
+   não está ligada em vez de fingir sucesso. E a recusa nunca explica o motivo:
+   quem forja webhook não pode aprender onde errou.
+
+Reembolso e contestação derrubam o acesso **e revogam a recompensa de
+indicação** — é assim que o programa se protege do golpe "pago, ganho a
+recompensa, peço o dinheiro de volta".
+
+### Fraude de indicação
+
+A defesa central é econômica, não técnica: a recompensa só nasce quando o
+indicado **paga e passa da janela de reembolso**. Para ganhar um mês de
+R$ 19,90 o fraudador precisaria pagar três assinaturas de verdade e não pedir
+reembolso. Ninguém faz isso.
+
+Bloqueio por IP foi **deliberadamente evitado**: mãe e filho dividem o wi-fi de
+casa, e a mãe indicando o filho é o caso de uso que queremos. Punir cliente
+legítimo sem parar o fraudador — que troca de IP em dois toques — é o pior dos
+dois mundos. O sinal fica registrado para auditoria, nunca para recusar.
+
+Outras travas: atribuição imutável (uma pessoa é indicada uma vez e para
+sempre, senão a mesma indicação se revende), cookie de atribuição assinado com
+HMAC e expiração, autoindicação recusada e teto anual de meses grátis por
+conta — para que nem um caso extremo nem um bug virem assinatura eterna.
+
+### Quotas
+
+Quota é controle de custo E de abuso. Toda operação que gasta IA passa por
+`check_quota` + `consume`: texto, documento e **áudio nos três caminhos** (web,
+WhatsApp e onboarding). O áudio é medido pelo tamanho do arquivo, arredondando
+para cima — errar a favor da fatura é a escolha certa quando o alternativo é
+transcrição ilimitada. `billing.margin_report()` mostra o pior caso por plano,
+que é o teto de prejuízo de uma conta abusiva.
+
 ## Privacidade
 
 * IP e token: apenas hash.
@@ -136,7 +187,10 @@ modo permissivo em produção. Idempotência por `provider_message_id`.
 ## Como verificar
 
 ```bash
-pytest tests/test_security.py -q      # 48 testes adversariais
+pytest tests/test_security.py -q      # testes adversariais de isolamento
+pytest tests/test_cenarios.py -q      # jornadas reais: quem vê o quê
+pytest tests/test_pagamento.py -q     # ataques ao webhook de cobrança
+pytest tests/test_indicacao.py -q     # fraude de indicação
 python -m agenda.cli check            # sanidade da configuração de produção
 python -m pyflakes agenda tests       # análise estática
 ```

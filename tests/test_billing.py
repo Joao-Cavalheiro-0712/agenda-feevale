@@ -85,12 +85,31 @@ def test_upload_alem_da_quota_devolve_402(client, db, user):
     assert corpo["status"] == "QUOTA" and corpo["upgrade"] == "/planos"
 
 
-def test_captura_de_texto_consome_quota(client, db, user):
+def test_captura_resolvida_localmente_nao_consome_quota(client, db, user):
+    """A quota segue o CUSTO, não o clique.
+
+    A base de conhecimento local resolve a maior parte das mensagens sem sair
+    daqui. Cobrar quota por algo que não gastou nada seria cobrar duas vezes
+    pelo mesmo produto — e é o oposto do que o limite existe para fazer.
+    """
     antes = billing.usage(db, user, "ai_messages")
-    client.post("/api/capture", json={"text": "prova de história sexta"},
-                headers={"X-CSRF-Token": _csrf(client)})
+    resposta = client.post("/api/capture", json={"text": "prova de história sexta"},
+                           headers={"X-CSRF-Token": _csrf(client)})
+    assert resposta.status_code == 200
     db.expire_all()
-    assert billing.usage(db, user, "ai_messages") == antes + 1
+    assert billing.usage(db, user, "ai_messages") == antes
+
+
+def test_quota_estourada_bloqueia_antes_de_interpretar(client, db, user):
+    """Mesmo sem custo por mensagem, o teto do plano continua valendo."""
+    limite = billing.limit_of(db, user, billing.MAX_AI_MESSAGES)
+    billing.consume(db, user, "ai_messages", amount=limite)
+    db.commit()
+
+    resposta = client.post("/api/capture", json={"text": "prova de história sexta"},
+                           headers={"X-CSRF-Token": _csrf(client)})
+    assert resposta.status_code == 402
+    assert resposta.get_json()["status"] == "QUOTA"
 
 
 def test_planejador_de_estudo_exige_plano(client, db, user):

@@ -73,6 +73,8 @@ def telegram_inbound():
     identity = request.headers.get("X-Forwarded-For") or request.remote_addr or "tg"
     if not rate_limit("webhook", identity):
         return "", 429
+    if not telegram.valid_secret(request.headers.get("X-Telegram-Bot-Api-Secret-Token")):
+        return "", 403
     update = request.get_json(silent=True) or {}
     try:
         telegram.handle_update(update)
