@@ -86,16 +86,48 @@ def _adopt_baseline(conexao, cfg, inspetor) -> None:
 
     esperadas = set(Base.metadata.tables)
     faltando = esperadas - tabelas
-    if faltando and tabelas & esperadas:
-        raise SystemExit(
-            "Schema incompleto e sem versão do Alembic. Faltam: "
-            + ", ".join(sorted(faltando)[:8])
-            + ". Rode `python -m agenda.cli reset-schema` (apaga tudo) num banco "
-            "sem dados, ou corrija o schema à mão antes de seguir."
-        )
+
     if not faltando:
         print("banco completo e sem versão: marcando a revisão base.")
         command.stamp(cfg, "head")
+        return
+
+    if not (tabelas & esperadas):
+        return  # banco de outra aplicação: não é problema nosso
+
+    # Schema pela metade — tipicamente uma migration que morreu no meio.
+    # Completar só é seguro se ainda não existe NENHUM dado; com dados, paramos
+    # e explicamos, porque aí a divergência precisa de olho humano.
+    if _sem_dados(conexao, tabelas & esperadas):
+        print(
+            "schema incompleto e banco vazio: criando as tabelas que faltam "
+            f"({len(faltando)}) e marcando a revisão base."
+        )
+        Base.metadata.create_all(conexao.engine)
+        command.stamp(cfg, "head")
+        return
+
+    raise SystemExit(
+        "Schema incompleto, sem versão do Alembic e COM dados. Faltam: "
+        + ", ".join(sorted(faltando)[:8])
+        + ". Corrija o schema à mão antes de subir — não vou adivinhar."
+    )
+
+
+def _sem_dados(conexao, tabelas) -> bool:
+    """True se todas as tabelas informadas estão vazias."""
+    from sqlalchemy import text
+
+    for tabela in tabelas:
+        if not tabela.replace("_", "").isalnum():
+            return False  # nome inesperado: por segurança, tratamos como "tem dados"
+        try:
+            existe = conexao.execute(text(f'SELECT 1 FROM "{tabela}" LIMIT 1')).first()
+        except Exception:  # noqa: BLE001 - tabela ilegível conta como não vazia
+            return False
+        if existe is not None:
+            return False
+    return True
 
 
 def _check() -> int:
