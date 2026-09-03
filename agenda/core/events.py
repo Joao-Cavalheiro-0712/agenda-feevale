@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
-from agenda.core import duplicates, reminders
+from agenda.core import academic, duplicates, reminders
 from agenda.core.dates import WEEKDAY_SHORT, human_delta
 from agenda.models import (
     AuditLog,
@@ -46,18 +46,15 @@ TYPE_LABELS = {
     EventType.OTHER.value: "Compromisso",
 }
 
-TYPE_LABELS_SCHOOL = {
-    **TYPE_LABELS,
-    EventType.ASSIGNMENT.value: "Trabalho",
-    EventType.PAPER.value: "Pesquisa",
-    EventType.ADMINISTRATIVE.value: "Aviso da escola",
-}
-
-
 def type_label(event_type: str, education_type: str = "") -> str:
-    if education_type in ("ELEMENTARY", "MIDDLE_SCHOOL"):
-        return TYPE_LABELS_SCHOOL.get(event_type, "Compromisso")
-    return TYPE_LABELS.get(event_type, "Compromisso")
+    """Rótulo do tipo no vocabulário do nível de ensino (SPEC §47).
+
+    "HOMEWORK" é *tema de casa* no fundamental, *lista de exercícios* no médio
+    e *tarefa* na faculdade. Quem decide é o perfil.
+    """
+    from agenda.core.profiles import type_label as profile_label
+
+    return profile_label(event_type, education_type)
 
 
 def tz_of(user: User) -> ZoneInfo:
@@ -258,7 +255,9 @@ def restore(db: Session, user: User, data: dict) -> Event:
     return event
 
 
-def event_card(event: Event, user: User, *, today: dt.date | None = None) -> dict:
+def event_card(
+    event: Event, user: User, *, today: dt.date | None = None, education_type: str = ""
+) -> dict:
     """Representação usada pela UI, pelo WhatsApp e pelas respostas do assistente."""
     tz = tz_of(user)
     today = today or dt.datetime.now(tz).date()
@@ -271,7 +270,7 @@ def event_card(event: Event, user: User, *, today: dt.date | None = None) -> dic
         "id": event.id,
         "title": event.title,
         "type": event.type,
-        "type_label": type_label(event.type),
+        "type_label": type_label(event.type, education_type),
         "date": event.local_date.isoformat(),
         "date_label": f"{WEEKDAY_SHORT[event.local_date.weekday()]} {event.local_date.strftime('%d/%m')}",
         "when": human_delta(event.local_date, today),
@@ -279,7 +278,7 @@ def event_card(event: Event, user: User, *, today: dt.date | None = None) -> dic
         "all_day": event.all_day,
         "subject": subject.display if subject else "",
         "subject_id": event.subject_id,
-        "color": subject.color if subject else "slate",
+        "color": academic.pigment(subject.color) if subject else "grafite",
         "location": location.label if location else "",
         "description": event.description,
         "status": event.status,
@@ -344,3 +343,45 @@ def refresh_statuses(db: Session, user: User) -> int:
         )
         changed += 1
     return changed
+
+
+# --------------------------------------------------------------------------- #
+# Checklist de materiais e subtarefas (SPEC §139, §140)
+# --------------------------------------------------------------------------- #
+MAX_CHECKLIST_ITEMS = 30
+MAX_CHECKLIST_TEXT = 120
+
+
+def normalize_checklist(raw) -> list[dict]:
+    """Aceita lista de textos ou de dicionários e devolve o formato canônico.
+
+    Sanitiza aqui, no núcleo: nenhuma camada acima precisa lembrar de limitar
+    tamanho ou de tirar item vazio.
+    """
+    if not raw:
+        return []
+    itens: list[dict] = []
+    for entrada in list(raw)[:MAX_CHECKLIST_ITEMS]:
+        if isinstance(entrada, str):
+            texto, feito = entrada, False
+        elif isinstance(entrada, dict):
+            texto = str(entrada.get("text", ""))
+            feito = bool(entrada.get("done"))
+        else:
+            continue
+        texto = " ".join(texto.split())[:MAX_CHECKLIST_TEXT]
+        if texto:
+            itens.append({"text": texto, "done": feito})
+    return itens
+
+
+def set_checklist(db: Session, event: Event, raw) -> list[dict]:
+    event.checklist = normalize_checklist(raw)
+    event.updated_at = dt.datetime.now(dt.timezone.utc)
+    db.flush()
+    return event.checklist
+
+
+def checklist_progress(event: Event) -> tuple[int, int]:
+    itens = event.checklist or []
+    return sum(1 for i in itens if i.get("done")), len(itens)

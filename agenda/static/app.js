@@ -100,14 +100,14 @@
       check.closest(".item")?.classList.toggle("done", !done);
       toast(result.message || "Não consegui salvar.");
     } else if (done) {
-      toast("Concluído ✓", result.action_id);
+      toast("Feito.", result.action_id);
     }
   });
 
   /* ---------------- Captura rápida ---------------- */
   async function sendCapture(payload) {
     const status = document.querySelector("[data-capture-status]");
-    if (status) status.textContent = "Organizando…";
+    if (status) status.textContent = "Grifando…";
     const result = await api("/api/capture", payload);
     renderCaptureResult(result);
     return result;
@@ -123,7 +123,7 @@
     box.innerHTML = "";
     if (result.transcript) {
       const heard = document.createElement("p");
-      heard.className = "tiny muted";
+      heard.className = "bubble heard";
       heard.textContent = `Ouvi: “${result.transcript}”`;
       box.appendChild(heard);
     }
@@ -139,7 +139,7 @@
       actions.className = "row";
       actions.style.marginTop = "10px";
       const yes = document.createElement("button");
-      yes.className = "btn sm"; yes.type = "button"; yes.textContent = "Confirmar";
+      yes.className = "btn sm marca"; yes.type = "button"; yes.textContent = "Confirmar";
       yes.onclick = async () => {
         const confirmed = await api(`/api/actions/${result.action_id}/confirm`, { method: "POST" });
         renderCaptureResult(confirmed);
@@ -164,23 +164,40 @@
 
   function cardNode(card) {
     const el = document.createElement("div");
-    el.className = `item c-${card.color || "slate"}`;
-    const rail = document.createElement("div"); rail.className = "rail";
-    const time = document.createElement("div");
-    time.className = "time" + (card.time ? "" : " empty");
-    time.textContent = card.time || "—";
-    const body = document.createElement("div"); body.className = "body";
-    const title = document.createElement("div"); title.className = "title"; title.textContent = card.title || "";
-    const meta = document.createElement("div"); meta.className = "meta";
-    [card.type_label, card.date_label || card.when, card.subject, card.location]
-      .filter(Boolean)
-      .forEach((text, index) => {
-        const span = document.createElement("span");
-        span.textContent = index === 0 ? text : `· ${text}`;
-        meta.appendChild(span);
-      });
+    el.className = `item p-${card.color || "grafite"}`;
+
+    const rail = document.createElement("span");
+    rail.className = "rail";
+
+    const time = document.createElement("span");
+    time.className = "time num" + (card.time ? "" : " empty");
+    time.textContent = card.time || card.when || "—";
+    if (!card.time && card.when) time.style.fontSize = ".74rem";
+
+    const body = document.createElement("span");
+    body.className = "body";
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = card.title || "";
+
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    if (card.type_label) {
+      const kind = document.createElement("span");
+      kind.className = "kind";
+      kind.textContent = card.type_label;
+      meta.appendChild(kind);
+    }
+    [card.subject, card.date_label, card.location].filter(Boolean).forEach((text) => {
+      const sep = document.createElement("span");
+      sep.className = "sep";
+      sep.textContent = "·";
+      const span = document.createElement("span");
+      span.textContent = text;
+      meta.append(sep, span);
+    });
     body.append(title, meta);
-    el.append(rail, time, body);
+    el.append(rail, time, body, document.createElement("span"));
     return el;
   }
   window.cardNode = cardNode;
@@ -251,6 +268,33 @@
     input.value = "";
   });
 
+  /* ---------------- Área de arrastar e soltar ---------------- */
+  const dropzone = document.querySelector("[data-dropzone]");
+  const fileInput = document.getElementById("files-input");
+  if (dropzone && fileInput) {
+    const lista = dropzone.querySelector("[data-file-list]");
+    const mostrar = () => {
+      const nomes = Array.from(fileInput.files || []).map((f) => f.name);
+      lista.hidden = nomes.length === 0;
+      lista.textContent = nomes.length === 1 ? nomes[0] : `${nomes.length} arquivos selecionados`;
+    };
+    fileInput.addEventListener("change", mostrar);
+    ["dragenter", "dragover"].forEach((evento) =>
+      dropzone.addEventListener(evento, (e) => {
+        e.preventDefault();
+        dropzone.classList.add("dragging");
+      }));
+    ["dragleave", "drop"].forEach((evento) =>
+      dropzone.addEventListener(evento, () => dropzone.classList.remove("dragging")));
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer?.files?.length) {
+        fileInput.files = e.dataTransfer.files;
+        mostrar();
+      }
+    });
+  }
+
   /* ---------------- Progresso de documento (SPEC §90) ---------------- */
   const pending = document.querySelector("[data-document-poll]");
   if (pending) {
@@ -281,5 +325,77 @@
   /* ---------------- Service worker ---------------- */
   if ("serviceWorker" in navigator && location.protocol === "https:") {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
+
+  /* ---------------- Web Push ---------------- */
+  function urlBase64ToUint8Array(base64) {
+    const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+    const normal = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(normal);
+    return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+  }
+
+  const pushToggle = document.getElementById("push-toggle");
+  if (pushToggle && "serviceWorker" in navigator && "PushManager" in window) {
+    const status = document.getElementById("push-status");
+    navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => { pushToggle.checked = !!sub; })
+      .catch(() => {});
+
+    pushToggle.addEventListener("change", async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        if (!pushToggle.checked) {
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) {
+            await api("/api/push/unsubscribe", { method: "POST", json: { endpoint: sub.endpoint } });
+            await sub.unsubscribe();
+          }
+          if (status) status.textContent = "Avisos no celular desligados.";
+          return;
+        }
+        const info = await api("/api/push/key");
+        if (!info.enabled) {
+          pushToggle.checked = false;
+          if (status) status.textContent = "Push ainda não está configurado neste ambiente.";
+          return;
+        }
+        const permissao = await Notification.requestPermission();
+        if (permissao !== "granted") {
+          pushToggle.checked = false;
+          if (status) status.textContent = "Seu navegador bloqueou as notificações.";
+          return;
+        }
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(info.publicKey),
+        });
+        await api("/api/push/subscribe", { method: "POST", json: sub.toJSON() });
+        if (status) status.textContent = "Pronto. Vou avisar mesmo com o app fechado.";
+      } catch (erro) {
+        pushToggle.checked = false;
+        if (status) status.textContent = "Não consegui ativar os avisos.";
+      }
+    });
+  }
+
+  /* ---------------- Tempo real (SSE) ---------------- */
+  if (document.body.dataset.realtime !== "off" && window.EventSource) {
+    let fonte;
+    const conectar = () => {
+      fonte = new EventSource("/api/stream");
+      fonte.addEventListener("agenda.changed", (evento) => {
+        let dados = {};
+        try { dados = JSON.parse(evento.data); } catch { /* payload inesperado */ }
+        toast(dados.message || "Sua agenda mudou.");
+        refreshSoon();
+      });
+      fonte.onerror = () => {
+        fonte.close();
+        setTimeout(conectar, 8000);   // reconecta sem martelar o servidor
+      };
+    };
+    if (document.querySelector(".nav")) conectar();
   }
 })();

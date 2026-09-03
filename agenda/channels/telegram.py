@@ -53,7 +53,7 @@ def send_text(db: Session, user: User, text: str) -> bool:
 
 def _send_raw(chat_id: str, text: str) -> bool:
     if not is_configured():
-        print(f"[telegram] (simulado) → {chat_id}: {text[:120]}")
+        print(f"[telegram] (simulado) → chat {chat_id[-4:]}: {len(text)} caracteres")
         return False
     try:
         response = requests.post(

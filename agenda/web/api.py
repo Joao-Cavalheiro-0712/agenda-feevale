@@ -12,11 +12,20 @@ from sqlalchemy import select
 
 from agenda import config
 from agenda.ai.providers import ai_available, get_speech_provider, record_usage
-from agenda.core import academic, actions as actions_core, assistant, notifications, planner
+from agenda.core import (
+    academic,
+    actions as actions_core,
+    assistant,
+    billing,
+    notifications,
+    planner,
+    scope,
+    study,
+)
 from agenda.core.actions import ActionProposal, Intent
 from agenda.core.events import event_card
 from agenda.ingest import pipeline
-from agenda.models import Document, Event, EventType, Notification, PushSubscription, SourceType
+from agenda.models import Document, Event, EventType, Notification, SourceType
 from agenda.web.deps import current_user, db, limited, login_required
 
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -39,6 +48,11 @@ def capture():
 
     uploaded = request.files.get("file")
     if uploaded and uploaded.filename:
+        pode, aviso = billing.check_quota(
+            db(), user, billing.MAX_DOCUMENT_IMPORTS, "document_imports"
+        )
+        if not pode:
+            return jsonify({"status": "QUOTA", "message": aviso, "upgrade": "/planos"}), 402
         try:
             document = pipeline.ingest(
                 db(), user, uploaded.filename, uploaded.read(),
@@ -46,6 +60,7 @@ def capture():
             )
         except pipeline.UploadError as exc:
             return jsonify({"status": "REJECTED", "message": str(exc)}), 400
+        billing.consume(db(), user, "document_imports")
         return jsonify(
             {
                 "status": "DOCUMENT",
@@ -59,6 +74,9 @@ def capture():
 
     audio = request.files.get("audio")
     if audio:
+        pode, aviso = billing.check_quota(db(), user, billing.MAX_AI_MESSAGES, "ai_messages")
+        if not pode:
+            return jsonify({"status": "QUOTA", "message": aviso, "upgrade": "/planos"}), 402
         data = audio.read()
         if len(data) > config.MAX_UPLOAD_BYTES:
             return jsonify({"status": "REJECTED", "message": "Áudio muito longo."}), 400
@@ -75,6 +93,7 @@ def capture():
                 {"status": "REJECTED", "message": "Não consegui entender o áudio. Tente de novo."}
             ), 200
         record_usage(db(), user_id=user.id, operation="transcribe", result=result)
+        billing.consume(db(), user, "ai_messages")
         response = assistant.handle_message(
             db(), user, result.text, channel="web", source_type=SourceType.VOICE.value
         )
@@ -82,9 +101,14 @@ def capture():
         return jsonify(response)
 
     payload = request.get_json(silent=True) or {}
-    text = (payload.get("text") or request.form.get("text") or "").strip()
+    text = (payload.get("text") or request.form.get("text") or "").strip()[:4000]
     if not text:
         return jsonify({"status": "REJECTED", "message": "Escreva ou grave alguma coisa."}), 400
+
+    pode, aviso = billing.check_quota(db(), user, billing.MAX_AI_MESSAGES, "ai_messages")
+    if not pode:
+        return jsonify({"status": "QUOTA", "message": aviso, "upgrade": "/planos"}), 402
+    billing.consume(db(), user, "ai_messages")
     return jsonify(
         assistant.handle_message(
             db(), user, text, channel="web", source_type=SourceType.WEB_CAPTURE.value
@@ -92,17 +116,44 @@ def capture():
     )
 
 
+@bp.post("/onboarding/voice")
+@login_required
+@limited("assistant")
+def onboarding_voice():
+    """Áudio do onboarding → estrutura revisável (SPEC §7)."""
+    from agenda.ai import onboarding as onboarding_ai
+
+    user = current_user()
+    audio = request.files.get("audio")
+    texto = (request.form.get("text") or "").strip()[:4000]
+
+    if audio is not None:
+        dados = audio.read()
+        if len(dados) > config.MAX_UPLOAD_BYTES:
+            return jsonify({"ok": False, "reason": "Áudio muito longo."}), 400
+        texto = onboarding_ai.transcribe(db(), user, dados, audio.mimetype or "audio/webm")
+    if not texto:
+        return jsonify({"ok": False, "reason": "Não consegui entender o áudio."}), 200
+
+    return jsonify(onboarding_ai.interpret(db(), user, texto))
+
+
 @bp.post("/assistant/message")
 @login_required
 @limited("assistant")
 def assistant_message():
+    user = current_user()
     payload = request.get_json(silent=True) or {}
-    text = (payload.get("text") or "").strip()
+    text = (payload.get("text") or "").strip()[:4000]
     if not text:
         return jsonify({"error": "Mensagem vazia."}), 400
+    pode, aviso = billing.check_quota(db(), user, billing.MAX_AI_MESSAGES, "ai_messages")
+    if not pode:
+        return jsonify({"status": "QUOTA", "message": aviso, "upgrade": "/planos"}), 402
+    billing.consume(db(), user, "ai_messages")
     return jsonify(
         assistant.handle_message(
-            db(), current_user(), text, channel="web", source_type=SourceType.WEB_CAPTURE.value
+            db(), user, text, channel="web", source_type=SourceType.WEB_CAPTURE.value
         )
     )
 
@@ -266,12 +317,28 @@ def delete_event(event_id: str):
     return jsonify(result.as_dict()), (200 if result.ok else 400)
 
 
+@bp.put("/events/<event_id>/checklist")
+@login_required
+def update_checklist(event_id: str):
+    """Substitui a lista inteira — operação atômica, sem estado intermediário."""
+    from agenda.core import events as events_core
+
+    user = current_user()
+    event = scope.get(db(), Event, event_id, user.id)
+    if event is None:
+        return jsonify({"error": "Não encontrado."}), 404
+    payload = request.get_json(silent=True) or {}
+    itens = events_core.set_checklist(db(), event, payload.get("items"))
+    feitos, total = events_core.checklist_progress(event)
+    return jsonify({"items": itens, "done": feitos, "total": total})
+
+
 @bp.get("/events/<event_id>")
 @login_required
 def get_event(event_id: str):
     user = current_user()
-    event = db().get(Event, event_id)
-    if event is None or event.user_id != user.id:
+    event = scope.get(db(), Event, event_id, user.id)
+    if event is None:
         return jsonify({"error": "Não encontrado."}), 404
     return jsonify(event_card(event, user))
 
@@ -283,8 +350,8 @@ def get_event(event_id: str):
 @login_required
 def document_status(document_id: str):
     user = current_user()
-    document = db().get(Document, document_id)
-    if document is None or document.user_id != user.id:
+    document = scope.get(db(), Document, document_id, user.id)
+    if document is None:
         return jsonify({"error": "Não encontrado."}), 404
     return jsonify(
         {
@@ -334,24 +401,90 @@ def read_all_notifications():
     return jsonify({"updated": notifications.mark_read(db(), current_user().id)})
 
 
+@bp.get("/push/key")
+@login_required
+def push_key():
+    """Chave pública VAPID para o navegador se inscrever."""
+    from agenda.channels import push
+
+    return jsonify({"enabled": push.is_configured(), "publicKey": config.VAPID_PUBLIC_KEY})
+
+
 @bp.post("/push/subscribe")
 @login_required
 def push_subscribe():
+    from agenda.channels import push
+
     payload = request.get_json(silent=True) or {}
-    endpoint = payload.get("endpoint")
-    if not endpoint:
-        return jsonify({"error": "endpoint ausente"}), 400
-    user = current_user()
-    existing = db().scalars(
-        select(PushSubscription).where(
-            PushSubscription.user_id == user.id, PushSubscription.endpoint == endpoint
-        )
-    ).first()
-    if existing is None:
-        db().add(
-            PushSubscription(user_id=user.id, endpoint=endpoint, keys=payload.get("keys"))
-        )
+    endpoint = (payload.get("endpoint") or "").strip()
+    if not endpoint.startswith("https://") or len(endpoint) > 800:
+        return jsonify({"error": "endpoint inválido"}), 400
+    keys = payload.get("keys")
+    if keys is not None and not isinstance(keys, dict):
+        return jsonify({"error": "keys inválidas"}), 400
+    push.register(db(), current_user(), endpoint, keys)
     return jsonify({"ok": True})
+
+
+@bp.post("/push/unsubscribe")
+@login_required
+def push_unsubscribe():
+    from agenda.channels import push
+
+    payload = request.get_json(silent=True) or {}
+    push.unregister(db(), current_user(), (payload.get("endpoint") or "").strip())
+    return jsonify({"ok": True})
+
+
+@bp.get("/stream")
+@login_required
+def stream():
+    """SSE: o que chega pelo WhatsApp aparece na aba aberta (SPEC §141)."""
+    from flask import Response
+
+    from agenda.web import realtime
+
+    user_id = current_user().id
+    resposta = Response(realtime.stream(user_id), mimetype="text/event-stream")
+    resposta.headers["Cache-Control"] = "no-cache, no-transform"
+    resposta.headers["X-Accel-Buffering"] = "no"
+    resposta.headers["Connection"] = "keep-alive"
+    return resposta
+
+
+@bp.post("/study/generate")
+@login_required
+def study_generate_api():
+    user = current_user()
+    if not billing.allows(db(), user, billing.CAN_USE_STUDY_PLANNER):
+        return jsonify({"status": "QUOTA", "message": "Disponível nos planos pagos.", "upgrade": "/planos"}), 402
+    propostas = study.propose(db(), user, today=planner.today_of(user))
+    criados = study.save(db(), user, propostas)
+    return jsonify({"status": "EXECUTED", "created": criados, "message": f"{criados} bloco(s) criado(s)."})
+
+
+@bp.post("/study/<block_id>/complete")
+@login_required
+def study_complete(block_id: str):
+    payload = request.get_json(silent=True) or {}
+    ok = study.complete(db(), current_user(), block_id, done=bool(payload.get("done", True)))
+    return jsonify({"ok": ok}), (200 if ok else 404)
+
+
+@bp.get("/plan")
+@login_required
+def plan_status():
+    resumo = billing.summary(db(), current_user())
+    plano = resumo["plan"]
+    return jsonify(
+        {
+            "tier": plano.tier,
+            "name": plano.name,
+            "status": resumo["subscription"].status,
+            "trial_days_left": resumo["trial_days_left"],
+            "usage": resumo["usage"],
+        }
+    )
 
 
 @bp.get("/export")

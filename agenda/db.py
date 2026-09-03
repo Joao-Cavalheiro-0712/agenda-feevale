@@ -51,5 +51,13 @@ def session_scope() -> Iterator[Session]:
 
 
 def init_db() -> None:
+    """Garante o schema em desenvolvimento e testes.
+
+    Em produção o schema é responsabilidade das migrations (`alembic upgrade
+    head`, executado no start). Criar tabelas automaticamente em produção
+    esconde divergências de schema e impede rollback controlado.
+    """
     importlib.import_module("agenda.models")  # registra os modelos no metadata
+    if config.IS_PRODUCTION and not config.AUTO_CREATE_TABLES:
+        return
     Base.metadata.create_all(engine)

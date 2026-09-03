@@ -1,83 +1,161 @@
 {% extends 'base.html' %}
 {% from 'partials/icons.html' import icon %}
 {% block title %}{{ event.title }} · {{ APP_NAME }}{% endblock %}
-{% block heading %}{{ card.type_label }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.today') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <span class="spacer"></span>
+  <button class="btn sm ghost" type="button" data-sheet="edit-event">Editar</button>
+</div></header>
+{% endblock %}
 {% block content %}
-<div class="card c-{{ card.color }}" style="border-left:4px solid var(--c)">
-  <h2 style="margin:0 0 6px;font-size:1.3rem;letter-spacing:-.02em">{{ event.title }}</h2>
-  <div class="meta muted" style="display:flex;gap:8px;flex-wrap:wrap">
-    <span class="tag">{{ card.type_label }}</span>
-    {% if card.subject %}<span>{{ card.subject }}</span>{% endif %}
-    <span>· {{ card.date_label }} ({{ card.when }})</span>
-    {% if card.time %}<span>· {{ card.time }}</span>{% endif %}
-    {% if card.location %}<span>· {{ card.location }}</span>{% endif %}
-  </div>
-  {% if event.description %}<p style="margin:12px 0 0;font-size:.94rem;white-space:pre-wrap">{{ event.description }}</p>{% endif %}
-  {% if event.weight or event.max_grade %}
-    <p class="tiny muted" style="margin:8px 0 0">Peso {{ event.weight or '—' }} · Nota máxima {{ event.max_grade or '—' }}</p>
-  {% endif %}
+<div class="pagehead p-{{ card.color }}">
+  <p class="label kicker" style="color:var(--pig)">{{ card.type_label }}{% if card.subject %} · {{ card.subject }}{% endif %}</p>
+  <h2 class="h-page">{{ event.title }}</h2>
+  <p class="sub">
+    <span class="num">{{ card.date_label }}</span> · {{ card.when }}
+    {% if card.time %} · <span class="num">{{ card.time }}</span>{% endif %}
+    {% if card.location %} · {{ card.location }}{% endif %}
+  </p>
 </div>
+
+{% if event.description %}
+  <div class="card" style="white-space:pre-wrap;font-size:.94rem">{{ event.description }}</div>
+{% endif %}
+
+{% if event.weight or event.max_grade %}
+  <p class="tiny muted">Peso <span class="num">{{ event.weight or '—' }}</span> · nota máxima <span class="num">{{ event.max_grade or '—' }}</span></p>
+{% endif %}
+
+<section class="section" id="checklist-section">
+  <header>
+    <h3>{{ 'O que levar' if event.type == 'MATERIAL' else 'Passo a passo' }}</h3>
+    <span class="count num" data-checklist-count>{{ (event.checklist or [])|selectattr('done')|list|length }}/{{ (event.checklist or [])|length }}</span>
+  </header>
+  <div class="card">
+    <div data-checklist>
+      {% for item in event.checklist or [] %}
+        <label class="check-linha">
+          <input type="checkbox" {{ 'checked' if item.done }} data-checklist-item>
+          <span>{{ item.text }}</span>
+          <button type="button" class="link" data-checklist-remove aria-label="Remover">×</button>
+        </label>
+      {% endfor %}
+    </div>
+    <form class="row" style="margin-top:var(--s3)" data-checklist-form>
+      <input type="text" name="item" placeholder="{{ 'cartolina, cola…' if event.type == 'MATERIAL' else 'próximo passo' }}" aria-label="Novo item">
+      <button class="btn sm" type="submit" style="flex:0 0 auto">Adicionar</button>
+    </form>
+  </div>
+</section>
 
 <section class="section">
   <header><h3>Lembretes</h3></header>
-  <div class="card">
-    {% if event.reminders %}
+  {% if event.reminders %}
+    <div class="steps">
       {% for reminder in event.reminders|sort(attribute='scheduled_for') %}
         <div class="step {{ 'done' if reminder.status == 'SENT' }}">
           <span class="dot"></span>
-          <span>{{ reminder.offset_days }} dia(s) antes · {{ reminder.scheduled_for.strftime('%d/%m %H:%M') }} · {{ reminder.status|lower }}</span>
+          <span>{{ reminder.offset_days|offset_pt }} · <span class="num">{{ reminder.scheduled_for.strftime('%d/%m às %H:%M') }}</span></span>
         </div>
       {% endfor %}
-    {% else %}
-      <p class="tiny muted" style="margin:0">Sem lembretes pendentes.</p>
-    {% endif %}
-  </div>
+    </div>
+  {% else %}
+    <p class="tiny muted" style="padding:var(--s2) 0">Sem lembretes pendentes.</p>
+  {% endif %}
 </section>
 
 <section class="section">
-  <header><h3>Origem</h3></header>
-  <div class="card tiny muted">
+  <header><h3>De onde veio</h3></header>
+  <p class="tiny muted" style="margin:0">
     {% if document %}
-      Importado de <a href="{{ url_for('pages.document_review', document_id=document.id) }}" style="color:var(--accent-text)">{{ document.filename }}</a>
-      {% if event.source_reference and event.source_reference.page %}· página {{ event.source_reference.page }}{% endif %}
-    {% elif event.source_type == 'WHATSAPP' %}
-      Criado a partir de uma mensagem no WhatsApp
-    {% elif event.source_type == 'VOICE' %}
-      Criado a partir de um áudio
-    {% elif event.source_type == 'SHARED' %}
-      Recebido de um colega
-    {% else %}
-      Criado por você
-    {% endif %}
-    · {{ event.created_at.strftime('%d/%m/%Y') }}
-    {% if event.confidence < 1 %}· confiança {{ (event.confidence * 100)|round|int }}%{% endif %}
-    {% if event.source_reference and event.source_reference.excerpt %}
-      <blockquote style="margin:8px 0 0;padding-left:10px;border-left:2px solid var(--border)">“{{ event.source_reference.excerpt }}”</blockquote>
-    {% endif %}
-  </div>
+      Importado de <a href="{{ url_for('pages.document_review', document_id=document.id) }}" class="link">{{ document.filename }}</a>{% if event.source_reference and event.source_reference.page %}, página {{ event.source_reference.page }}{% endif %}
+    {% elif event.source_type == 'WHATSAPP' %}Criado a partir de uma mensagem no WhatsApp
+    {% elif event.source_type == 'VOICE' %}Criado a partir de um áudio que você gravou
+    {% elif event.source_type == 'SHARED' %}Recebido de um colega
+    {% else %}Criado por você{% endif %}
+    · <span class="num">{{ event.created_at.strftime('%d/%m/%Y') }}</span>
+    {% if event.confidence < 1 %} · confiança <span class="num">{{ (event.confidence * 100)|round|int }}%</span>{% endif %}
+  </p>
+  {% if event.source_reference and event.source_reference.excerpt %}
+    <blockquote class="trecho">“{{ event.source_reference.excerpt }}”</blockquote>
+  {% endif %}
 </section>
 
-<div class="stack" style="margin-bottom:30px">
-  <button class="btn ghost block" type="button" data-sheet="edit-event">Editar</button>
-  <button class="btn ghost block" type="button" id="delete-event" style="color:var(--danger)">Remover</button>
+<div class="stack" style="margin-bottom:var(--s7)">
+  <button class="btn perigo block" type="button" id="delete-event">{{ icon('lixeira') }} Remover</button>
 </div>
 
-<div class="sheet" id="edit-event" role="dialog" aria-modal="true" aria-label="Editar">
+<div class="sheet" id="edit-event" role="dialog" aria-modal="true" aria-labelledby="editar-evento">
   <div class="grabber"></div>
-  <h3>Editar</h3>
+  <h3 id="editar-evento">Editar</h3>
   <form id="edit-form">
     <label class="field"><span>Título</span><input type="text" name="title" value="{{ event.title }}"></label>
     <div class="row">
       <label class="field"><span>Data</span><input type="date" name="date" value="{{ event.local_date.isoformat() }}"></label>
       <label class="field"><span>Horário</span><input type="time" name="start_time" value="{{ card.time }}"></label>
     </div>
-    <label class="field"><span>Descrição</span><textarea name="description">{{ event.description }}</textarea></label>
+    <label class="field"><span>Detalhes</span><textarea name="description">{{ event.description }}</textarea></label>
     <button class="btn block" type="submit">Salvar</button>
   </form>
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ nonce }}">
+/* ----- Checklist ----- */
+const bloco = document.querySelector('[data-checklist]');
+const contador = document.querySelector('[data-checklist-count]');
+
+function itensAtuais() {
+  return Array.from(bloco.querySelectorAll('.check-linha')).map(linha => ({
+    text: linha.querySelector('span').textContent,
+    done: linha.querySelector('input').checked,
+  }));
+}
+
+async function salvarChecklist() {
+  const items = itensAtuais();
+  const resposta = await api('/api/events/{{ event.id }}/checklist', { method: 'PUT', json: { items } });
+  if (contador && resposta.total !== undefined) contador.textContent = `${resposta.done}/${resposta.total}`;
+}
+
+function criarLinha(texto, feito) {
+  const linha = document.createElement('label');
+  linha.className = 'check-linha';
+  const caixa = document.createElement('input');
+  caixa.type = 'checkbox';
+  caixa.checked = !!feito;
+  caixa.dataset.checklistItem = '';
+  const rotulo = document.createElement('span');
+  rotulo.textContent = texto;
+  const remover = document.createElement('button');
+  remover.type = 'button';
+  remover.className = 'link';
+  remover.dataset.checklistRemove = '';
+  remover.textContent = '×';
+  remover.setAttribute('aria-label', 'Remover');
+  linha.append(caixa, rotulo, remover);
+  return linha;
+}
+
+bloco.addEventListener('change', salvarChecklist);
+bloco.addEventListener('click', (evento) => {
+  if (evento.target.matches('[data-checklist-remove]')) {
+    evento.preventDefault();
+    evento.target.closest('.check-linha').remove();
+    salvarChecklist();
+  }
+});
+document.querySelector('[data-checklist-form]').addEventListener('submit', (evento) => {
+  evento.preventDefault();
+  const campo = evento.target.querySelector('input[name=item]');
+  const texto = campo.value.trim();
+  if (!texto) return;
+  texto.split(/\s*(?:,|;| e )\s*/).filter(Boolean).forEach(parte => bloco.appendChild(criarLinha(parte, false)));
+  campo.value = '';
+  salvarChecklist();
+});
+
 document.getElementById('edit-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(event.target).entries());
@@ -86,10 +164,10 @@ document.getElementById('edit-form').addEventListener('submit', async (event) =>
   setTimeout(() => location.reload(), 700);
 });
 document.getElementById('delete-event').addEventListener('click', async () => {
-  if (!confirm('Remover “{{ event.title|replace("'", "") }}”?')) return;
+  if (!confirm('Remover este item da sua agenda?')) return;
   const result = await api('/api/events/{{ event.id }}', { method: 'DELETE' });
   toast(result.message || 'Removido.', result.action_id);
-  setTimeout(() => location.href = '{{ url_for("pages.today") }}', 900);
+  setTimeout(() => location.href = '{{ url_for("pages.today") }}', 1200);
 });
 </script>
 {% endblock %}

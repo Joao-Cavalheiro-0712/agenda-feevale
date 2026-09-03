@@ -4,28 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <meta name="theme-color" content="#5b5bd6">
-  <meta name="description" content="Mande o cronograma, a foto do quadro ou um áudio. O {{ APP_NAME }} organiza sua vida acadêmica.">
+  <meta name="theme-color" content="#faf6ef" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#12100c" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Manda o cronograma, a foto do quadro ou um áudio. O {{ APP_NAME }} grifa o que importa e monta sua agenda.">
   <title>{% block title %}{{ APP_NAME }}{% endblock %}</title>
   <link rel="manifest" href="{{ url_for('pages.manifest') }}">
   <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon.svg') }}">
+  <link rel="preload" href="{{ url_for('static', filename='fonts/space-grotesk-latin.woff2') }}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ url_for('static', filename='fonts/fraunces-latin.woff2') }}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', filename='brand.css') }}?v={{ version }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v={{ version }}">
 </head>
 <body data-autorefresh="{{ autorefresh|default('on') }}">
+<a class="sr-only" href="#conteudo">Pular para o conteúdo</a>
 <div class="shell">
   {% if current_user and current_user.onboarding_done %}{% include 'partials/nav.html' %}{% endif %}
   <div class="main">
-    {% block topbar %}
-      <header class="topbar">
-        <div class="wrap">
-          <h1>{% block heading %}{{ APP_NAME }}{% endblock %}</h1>
-          <div class="spacer"></div>
-          {% block topbar_actions %}{% endblock %}
-        </div>
-      </header>
-    {% endblock %}
-
+    {% block topbar %}{% endblock %}
     <main class="wrap" id="conteudo">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for category, message in messages %}
@@ -42,7 +38,7 @@
   {% include 'partials/capture.html' %}
 {% endif %}
 
-<script src="{{ url_for('static', filename='app.js') }}?v={{ version }}" defer></script>
+<script src="{{ url_for('static', filename='app.js') }}?v={{ version }}" nonce="{{ nonce }}" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

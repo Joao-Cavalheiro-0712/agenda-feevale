@@ -197,11 +197,17 @@ def extract_pages(filename: str, data: bytes) -> list[dict]:
 
 
 def _pdf_pages(data: bytes) -> list[dict]:
+    """Páginas do PDF, com teto de páginas e de texto (proteção contra DoS)."""
     import pdfplumber
 
+    from agenda import config
+
     pages: list[dict] = []
+    total_chars = 0
     with pdfplumber.open(io.BytesIO(data)) as pdf:
         for index, page in enumerate(pdf.pages, start=1):
+            if index > config.MAX_DOCUMENT_PAGES or total_chars > config.MAX_DOCUMENT_CHARS:
+                break
             text = page.extract_text() or ""
             tables = []
             for table in page.extract_tables() or []:
@@ -213,6 +219,8 @@ def _pdf_pages(data: bytes) -> list[dict]:
                 if rows:
                     tables.append(rows)
             flat = text + "\n" + "\n".join("\n".join(t) for t in tables)
+            flat = flat[: config.MAX_DOCUMENT_CHARS]
+            total_chars += len(flat)
             pages.append(
                 {
                     "page": index,

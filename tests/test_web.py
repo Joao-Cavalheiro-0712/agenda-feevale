@@ -22,7 +22,23 @@ def test_cabecalhos_de_seguranca(app):
     response = app.test_client().get("/entrar")
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["X-Frame-Options"] == "DENY"
-    assert "default-src 'self'" in response.headers["Content-Security-Policy"]
+    assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+
+    csp = response.headers["Content-Security-Policy"]
+    assert "default-src 'none'" in csp
+    assert "object-src 'none'" in csp
+    assert "frame-ancestors 'none'" in csp
+    assert "base-uri 'none'" in csp
+    # Sem 'unsafe-inline' em script-src: XSS refletido não executa.
+    assert "'unsafe-inline'" not in csp.split("style-src")[0]
+    assert "'nonce-" in csp
+
+
+def test_nonce_muda_a_cada_requisicao(app):
+    client = app.test_client()
+    primeiro = client.get("/entrar").headers["Content-Security-Policy"]
+    segundo = client.get("/entrar").headers["Content-Security-Policy"]
+    assert primeiro != segundo
 
 
 def test_area_logada_exige_sessao(app):

@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon, mark %}
+{% block title %}Contar falando · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.onboarding') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <span class="wordmark">{{ mark() }}{{ APP_NAME }}</span>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead" style="padding-top:var(--s6)">
+  <p class="label kicker">Prefere falar?</p>
+  <h2 class="h-page">Conte como são seus <span class="grifo-sob">estudos</span></h2>
+  <p class="sub">“Faço Direito na Feevale, primeiro semestre. Tenho Penal segunda e quarta das sete e meia às nove e meia…”</p>
+</div>
+
+{% if not ia_disponivel %}
+  <div class="card">
+    <p class="tiny muted" style="margin:0 0 var(--s3)">
+      A leitura por voz precisa da chave de IA configurada neste ambiente.
+      Você pode preencher no formulário — leva o mesmo tempo.
+    </p>
+    <a class="btn block" href="{{ url_for('pages.onboarding') }}">Preencher no formulário</a>
+  </div>
+{% else %}
+  <div class="card center" id="gravacao">
+    <button type="button" class="mic" id="botao-gravar" style="width:72px;height:72px;border-radius:50%;margin:0 auto var(--s4)"
+            aria-label="Gravar">{{ icon('microfone') }}</button>
+    <p class="tiny muted" id="status-voz" style="margin:0">Toque para começar a gravar.</p>
+    <hr class="divider">
+    <details>
+      <summary class="tiny muted" style="cursor:pointer">Prefiro escrever</summary>
+      <form id="form-texto" style="margin-top:var(--s3)">
+        <textarea name="text" rows="4" placeholder="Faço Direito na Feevale, primeiro semestre. Tenho Penal segunda e quarta das 19:30 às 21:30…"></textarea>
+        <button class="btn block" type="submit" style="margin-top:var(--s3)">Organizar</button>
+      </form>
+    </details>
+  </div>
+
+  <form method="post" action="{{ url_for('pages.onboarding_voice_confirm') }}" id="revisao" hidden>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="payload" id="payload">
+    <div class="pagehead" style="padding-bottom:var(--s2)">
+      <p class="label kicker">Confira antes de eu salvar</p>
+      <h2 class="h-card" id="resumo-contexto"></h2>
+      <p class="sub tiny" id="resumo-transcricao"></p>
+    </div>
+    <div id="lista-materias"></div>
+    <div class="stack g4" style="margin:var(--s5) 0 var(--s7)">
+      <button class="btn marca block" type="submit">Confirmar e montar minha agenda</button>
+      <button class="link center" type="button" id="regravar" style="display:block;margin:0 auto">Gravar de novo</button>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ nonce }}">
+(function () {
+  const botao = document.getElementById('botao-gravar');
+  if (!botao) return;
+
+  const status = document.getElementById('status-voz');
+  const revisao = document.getElementById('revisao');
+  const gravacaoBox = document.getElementById('gravacao');
+  let gravador = null;
+  let pedacos = [];
+
+  async function enviar(formData) {
+    status.textContent = 'Organizando o que você falou…';
+    const resposta = await fetch('/api/onboarding/voice', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+      body: formData,
+    });
+    const dados = await resposta.json();
+    if (!dados.ok) {
+      status.textContent = dados.reason || 'Não consegui entender. Tente de novo.';
+      return;
+    }
+    montarRevisao(dados);
+  }
+
+  function montarRevisao(dados) {
+    document.getElementById('payload').value = JSON.stringify(dados);
+    document.getElementById('resumo-contexto').textContent =
+      [dados.course, dados.institution, dados.period].filter(Boolean).join(' · ') || dados.education_label;
+    document.getElementById('resumo-transcricao').textContent = dados.transcript ? `Ouvi: “${dados.transcript}”` : '';
+
+    const lista = document.getElementById('lista-materias');
+    lista.innerHTML = '';
+    dados.subjects.forEach((materia, indice) => {
+      const linha = document.createElement('label');
+      linha.className = 'capture-option';
+      linha.style.alignItems = 'flex-start';
+
+      const caixa = document.createElement('input');
+      caixa.type = 'checkbox';
+      caixa.name = 'keep';
+      caixa.value = String(indice);
+      caixa.checked = materia.confidence >= 0.7;
+      caixa.style.marginTop = '4px';
+
+      const texto = document.createElement('span');
+      const titulo = document.createElement('strong');
+      titulo.textContent = materia.name;
+      const detalhe = document.createElement('small');
+      const horarios = (materia.schedules || [])
+        .map((h) => `${h.weekday_label} ${h.start_time}–${h.end_time}`)
+        .join(' · ');
+      detalhe.textContent = [materia.teacher, horarios].filter(Boolean).join(' · ') || 'sem horário informado';
+      texto.append(titulo, detalhe);
+
+      if (materia.confidence < 0.7) {
+        const aviso = document.createElement('span');
+        aviso.className = 'tag atencao';
+        aviso.textContent = 'confira';
+        texto.appendChild(aviso);
+      }
+      linha.append(caixa, texto);
+      lista.appendChild(linha);
+    });
+
+    gravacaoBox.hidden = true;
+    revisao.hidden = false;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  botao.addEventListener('click', async () => {
+    if (gravador && gravador.state === 'recording') { gravador.stop(); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      gravador = new MediaRecorder(stream);
+      pedacos = [];
+      gravador.ondataavailable = (e) => pedacos.push(e.data);
+      gravador.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        botao.classList.remove('recording');
+        const blob = new Blob(pedacos, { type: gravador.mimeType || 'audio/webm' });
+        if (blob.size < 2000) { status.textContent = 'Ficou curto demais. Tente contar com calma.'; return; }
+        const form = new FormData();
+        form.append('audio', blob, 'onboarding.webm');
+        await enviar(form);
+      };
+      gravador.start();
+      botao.classList.add('recording');
+      status.textContent = 'Gravando… toque de novo quando terminar.';
+    } catch {
+      status.textContent = 'Não consegui acessar o microfone.';
+    }
+  });
+
+  document.getElementById('form-texto').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const texto = evento.target.querySelector('[name=text]').value.trim();
+    if (!texto) return;
+    const form = new FormData();
+    form.append('text', texto);
+    await enviar(form);
+  });
+
+  document.getElementById('regravar').addEventListener('click', () => {
+    revisao.hidden = true;
+    gravacaoBox.hidden = false;
+    status.textContent = 'Toque para começar a gravar.';
+  });
+})();
+</script>
+{% endblock %}

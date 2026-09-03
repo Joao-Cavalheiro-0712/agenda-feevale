@@ -1,87 +1,111 @@
 {% extends 'base.html' %}
+{% from 'partials/icons.html' import icon, art %}
 {% block title %}{{ document.filename }} · {{ APP_NAME }}{% endblock %}
-{% block heading %}Revisar{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.documents') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw">{{ document.filename }}</strong>
+</div></header>
+{% endblock %}
 {% block content %}
-<div class="card">
-  <strong>{{ document.filename }}</strong>
-  <p class="tiny muted" style="margin:4px 0 0">
-    {{ document.page_count }} página(s) · enviado em {{ document.created_at.strftime('%d/%m/%Y') }}
-    {% if document.source_channel == 'WHATSAPP' %} · via WhatsApp{% endif %}
-  </p>
 
-  {% if document.status in ['QUEUED','EXTRACTING','INTERPRETING'] %}
-    <div class="steps" style="margin-top:14px" data-document-poll="{{ document.id }}">
-      {% for step in document.progress or [] %}
-        <div class="step {{ 'done' if step.done }}" data-step="{{ step.key }}"><span class="dot"></span><span>{{ step.label }}</span></div>
-      {% endfor %}
-    </div>
-  {% elif document.status == 'FAILED' %}
-    <p class="flash error" style="margin-top:12px">{{ document.error }}</p>
-  {% else %}
-    <p style="margin:12px 0 0;font-size:.95rem">
-      Encontrei {{ summary.events }} atividade(s){% if summary.subjects %}, {{ summary.subjects }} matéria(s){% endif %}{% if summary.schedules %} e {{ summary.schedules }} aula(s) recorrente(s){% endif %}.
-      {% if summary.needs_review %}<br><span class="muted">{{ summary.needs_review }} precisam da sua conferência.</span>{% endif %}
+{% if document.status in ['QUEUED','EXTRACTING','INTERPRETING'] %}
+  <div class="pagehead">
+    <p class="label kicker">Um instante</p>
+    <h2 class="h-page">Lendo seu cronograma…</h2>
+  </div>
+  <div class="steps card" data-document-poll="{{ document.id }}">
+    {% for step in document.progress or [] %}
+      <div class="step {{ 'done' if step.done }}" data-step="{{ step.key }}"><span class="dot"></span><span>{{ step.label }}</span></div>
+    {% endfor %}
+  </div>
+
+{% elif document.status == 'FAILED' %}
+  <div class="pagehead">
+    <p class="label kicker">Não deu</p>
+    <h2 class="h-page">Não consegui ler esse arquivo</h2>
+  </div>
+  <div class="flash error">{{ document.error }}</div>
+  <div class="stack g4" style="margin-top:var(--s5)">
+    <a class="btn ghost block" href="{{ url_for('pages.documents') }}">Tentar outro arquivo</a>
+    <button class="btn marca block" type="button" data-sheet="capture-sheet">Me contar por texto</button>
+  </div>
+
+{% else %}
+  <div class="pagehead">
+    <p class="label kicker">Revisão</p>
+    <h2 class="h-page">Encontrei <span class="grifo-sob">{{ summary.events }}</span> {{ 'atividade' if summary.events == 1 else 'atividades' }}</h2>
+    <p class="sub">
+      {% if summary.subjects %}{{ summary.subjects }} matéria(s){% if summary.schedules %} e {% endif %}{% endif %}
+      {% if summary.schedules %}{{ summary.schedules }} aula(s) recorrente(s){% endif %}
+      {% if summary.needs_review %}{% if summary.subjects or summary.schedules %} · {% endif %}{{ summary.needs_review }} item(ns) que eu quero que você confira antes.{% endif %}
     </p>
-  {% endif %}
-</div>
+  </div>
+{% endif %}
 
 {% if items %}
 <form method="post" action="{{ url_for('pages.import_document', document_id=document.id) }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
   {% for item in items %}
-    <div class="card" style="margin-top:10px;{{ 'border-color:var(--warning)' if item.needs_review }}">
-      <label style="display:flex;gap:12px;align-items:flex-start;cursor:pointer">
-        <input type="checkbox" name="selected" value="{{ item.id }}" {{ 'checked' if not item.needs_review }}
-               style="width:22px;height:22px;margin-top:2px;flex:none;accent-color:var(--accent)">
+    <div class="card" style="margin-top:var(--s3);{{ 'border-left:3px solid var(--atencao)' if item.needs_review }}">
+      <label style="display:flex;gap:var(--s3);align-items:flex-start;cursor:pointer">
+        <input type="checkbox" name="selected" value="{{ item.id }}" {{ 'checked' if not item.needs_review }} style="margin-top:3px;flex:none">
         <span style="flex:1;min-width:0">
-          <span class="tag plain">{{ {'event':'Atividade','subject':'Matéria','schedule':'Aula','calendar':'Calendário'}[item.kind] }}</span>
-          <span class="tag {{ 'warning' if item.confidence < 0.9 else 'success' }}">{{ (item.confidence * 100)|round|int }}%</span>
+          <span style="display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap">
+            <span class="kind">{{ {'event':'Atividade','subject':'Matéria','schedule':'Aula','calendar':'Calendário'}[item.kind] }}</span>
+            <span class="tag {{ 'atencao' if item.confidence < 0.9 else 'feito' }}">{{ (item.confidence * 100)|round|int }}%</span>
+          </span>
+
           {% if item.kind == 'event' %}
-            <div class="row" style="margin-top:8px">
+            <span class="row" style="margin-top:var(--s3)">
               <input type="text" name="title_{{ item.id }}" value="{{ item.payload.title }}" aria-label="Título">
-              <input type="date" name="date_{{ item.id }}" value="{{ item.payload.date or '' }}" aria-label="Data" style="max-width:150px">
-            </div>
-            <div class="tiny muted" style="margin-top:6px">
-              {{ item.payload.subject_name or 'sem matéria' }}
-              {% if item.payload.start_time %}· {{ item.payload.start_time }}{% endif %}
-              {% if item.source_reference and item.source_reference.page %}· pág. {{ item.source_reference.page }}{% endif %}
-            </div>
-            {% if item.review_reason %}<div class="tiny" style="color:var(--warning);margin-top:4px">⚠ {{ item.review_reason }}</div>{% endif %}
-            {% if item.source_reference and item.source_reference.excerpt %}
-              <blockquote class="tiny muted" style="margin:8px 0 0;padding-left:10px;border-left:2px solid var(--border)">“{{ item.source_reference.excerpt }}”</blockquote>
+              <input type="date" name="date_{{ item.id }}" value="{{ item.payload.date or '' }}" aria-label="Data" style="max-width:158px;flex:0 1 158px">
+            </span>
+            <span class="tiny muted" style="display:block;margin-top:var(--s2)">
+              {{ item.payload.subject_name or 'sem matéria identificada' }}
+              {% if item.payload.start_time %} · <span class="num">{{ item.payload.start_time }}</span>{% endif %}
+              {% if item.source_reference and item.source_reference.page %} · página {{ item.source_reference.page }}{% endif %}
+            </span>
+            {% if item.review_reason %}
+              <span class="tiny" style="display:block;margin-top:var(--s1);color:var(--atencao)">{{ item.review_reason }}</span>
             {% endif %}
+            {% if item.source_reference and item.source_reference.excerpt %}
+              <blockquote class="trecho">“{{ item.source_reference.excerpt }}”</blockquote>
+            {% endif %}
+
           {% elif item.kind == 'schedule' %}
-            <div style="margin-top:6px"><strong>{{ item.payload.subject_name }}</strong>
-              <div class="tiny muted">{{ ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'][item.payload.weekday] }} · {{ item.payload.start_time }}–{{ item.payload.end_time }}</div></div>
+            <strong style="display:block;margin-top:var(--s2)">{{ item.payload.subject_name }}</strong>
+            <span class="tiny muted">{{ item.payload.weekday|weekday_pt }} · <span class="num">{{ item.payload.start_time }}–{{ item.payload.end_time }}</span></span>
           {% elif item.kind == 'subject' %}
-            <div style="margin-top:6px"><strong>{{ item.payload.name }}</strong>
-              {% if item.payload.teacher %}<div class="tiny muted">{{ item.payload.teacher }}</div>{% endif %}</div>
+            <strong style="display:block;margin-top:var(--s2)">{{ item.payload.name }}</strong>
+            {% if item.payload.teacher %}<span class="tiny muted">{{ item.payload.teacher }}</span>{% endif %}
           {% else %}
-            <div style="margin-top:6px"><strong>{{ item.payload.label }}</strong>
-              <div class="tiny muted">{{ item.payload.date }}{% if item.payload.end_date != item.payload.date %} – {{ item.payload.end_date }}{% endif %} · {{ item.payload.kind|lower }}</div></div>
+            <strong style="display:block;margin-top:var(--s2)">{{ item.payload.label }}</strong>
+            <span class="tiny muted num">{{ item.payload.date }}{% if item.payload.end_date != item.payload.date %} – {{ item.payload.end_date }}{% endif %}</span>
           {% endif %}
         </span>
       </label>
     </div>
   {% endfor %}
 
-  <div class="stack" style="margin:18px 0 30px">
-    <button class="btn block" type="submit">Importar selecionados</button>
-    <button class="btn ghost block" type="button" onclick="document.querySelectorAll('[name=selected]').forEach(c => c.checked = true)">Selecionar tudo</button>
+  <div class="stack g4" style="margin:var(--s6) 0 var(--s7)">
+    <button class="btn marca block" type="submit">Importar o que está marcado</button>
+    <button class="link center" type="button" onclick="document.querySelectorAll('[name=selected]').forEach(c => c.checked = true)">Marcar tudo</button>
   </div>
 </form>
-{% elif document.status not in ['QUEUED','EXTRACTING','INTERPRETING','FAILED'] %}
-  <div class="card empty">
-    <div class="art">🔍</div>
-    <h4>Não encontrei atividades com data.</h4>
-    <p>Cronogramas com datas explícitas (15/04, 15 de abril) funcionam melhor. Você também pode me contar por texto.</p>
-    <div class="actions"><button class="btn" type="button" data-sheet="capture-sheet">Contar por texto</button></div>
+
+{% elif document.status in ['READY','NEEDS_REVIEW','IMPORTED'] %}
+  <div class="empty">
+    {{ art('sem-documento') }}
+    <h4>Não achei atividades com data.</h4>
+    <p>Cronogramas com datas escritas (15/04, 15 de abril) funcionam melhor. Se preferir, me conte por texto.</p>
+    <div class="actions"><button class="btn marca" type="button" data-sheet="capture-sheet">Contar por texto</button></div>
   </div>
 {% endif %}
 
-<form method="post" action="{{ url_for('pages.delete_document', document_id=document.id) }}" style="margin-bottom:30px">
+<form method="post" action="{{ url_for('pages.delete_document', document_id=document.id) }}" style="margin-bottom:var(--s7)">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <button class="btn link" type="submit" style="color:var(--danger)">Excluir documento</button>
+  <button class="link" type="submit" style="color:var(--alerta);border-color:transparent">Excluir este documento</button>
 </form>
 {% endblock %}

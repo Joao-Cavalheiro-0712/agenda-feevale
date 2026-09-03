@@ -1,24 +1,30 @@
 {% extends 'base.html' %}
 {% from 'partials/item.html' import event_item %}
+{% from 'partials/icons.html' import icon %}
 {% block title %}Buscar · {{ APP_NAME }}{% endblock %}
-{% block heading %}Buscar{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.today') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <form method="get" style="flex:1"><input type="search" name="q" value="{{ query }}" placeholder="prova de história de outubro" autofocus aria-label="Buscar"></form>
+</div></header>
+{% endblock %}
 {% block content %}
-<form method="get" style="margin-top:8px">
-  <input type="search" name="q" value="{{ query }}" placeholder="prova de história de outubro" autofocus aria-label="Buscar">
-</form>
 {% if query %}
   {% if results.subjects %}
     <section class="section"><header><h3>Matérias</h3></header>
       {% for subject in results.subjects %}
-        <a class="item c-{{ subject.color }}" href="{{ url_for('pages.subject_detail', subject_id=subject.id) }}">
-          <div class="rail"></div><div class="body"><div class="title">{{ subject.name }}</div></div>
+        <a class="item p-{{ subject.color|pigmento }}" href="{{ url_for('pages.subject_detail', subject_id=subject.id) }}">
+          <span class="rail"></span><span class="time empty">—</span>
+          <span class="body"><span class="title">{{ subject.name }}</span></span><span></span>
         </a>
       {% endfor %}
     </section>
   {% endif %}
-  <section class="section"><header><h3>Compromissos</h3></header>
-    {% if results.events %}{% for card in results.events %}{{ event_item(card, checkable=False) }}{% endfor %}
-    {% else %}<p class="tiny muted">Nada encontrado para “{{ query }}”.</p>{% endif %}
+  <section class="section"><header><h3>Compromissos</h3>{% if results.events %}<span class="count num">{{ results.events|length }}</span>{% endif %}</header>
+    {% if results.events %}{% for card in results.events %}{{ event_item(card, checkable=False, show_date=True) }}{% endfor %}
+    {% else %}<p class="tiny muted" style="padding:var(--s3) 0">Nada encontrado para “{{ query }}”.</p>{% endif %}
   </section>
+{% else %}
+  <p class="tiny muted" style="margin-top:var(--s5)">Busque por matéria, professor, tipo de atividade ou período.</p>
 {% endif %}
 {% endblock %}

@@ -1,0 +1,308 @@
+/* ==========================================================================
+   GRIFO — fundação da marca
+   --------------------------------------------------------------------------
+   "grifar" v. destacar o que importa numa página.
+
+   A identidade nasce de um gesto físico do estudante: passar o marca-texto
+   sobre o que não pode esquecer. Daí vem tudo — o papel quente, a tinta que
+   não é preta, o traço cítrico que marca o agora, e uma tipografia editorial
+   que trata a agenda como um caderno bem feito, não como um painel de ERP.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Tipografia
+   Fraunces      — display e wordmark. Serifa variável com WONK ligado: tem
+                   idiossincrasia, dá voz à marca.
+   Space Grotesk — interface e dados. Grotesca de desenho jovem, com numerais
+                   tabulares que alinham horários em coluna.
+   -------------------------------------------------------------------------- */
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("/static/fonts/fraunces-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("/static/fonts/fraunces-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/static/fonts/space-grotesk-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/static/fonts/space-grotesk-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* --------------------------------------------------------------------------
+   Tokens
+   -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light dark;
+
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-ui: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Papel e tinta. Nem branco puro nem preto puro: o produto é um caderno. */
+  --paper: #faf6ef;
+  --paper-2: #f3ede2;
+  --paper-3: #e9e1d3;
+  --card: #fffdf9;
+  --ink: #16130e;
+  --ink-2: #4b463d;
+  --ink-3: #7d766a;
+  --ink-4: #786f60;
+  --rule: #e2d9c9;
+  --rule-strong: #cbbfa9;
+
+  /* O acento da marca é o traço do marca-texto. Ele só existe como FUNDO —
+     o texto sobre ele é sempre tinta, o que garante contraste alto. */
+  --grifo: #d8f24b;
+  --grifo-deep: #c2dd2c;
+  --grifo-wash: #eef8b8;
+
+  /* Sinalização */
+  --alerta: #c6402f;
+  --alerta-wash: #f7e6e1;
+  --feito: #3f7a52;
+  --feito-wash: #e6f0e5;
+  --atencao: #9a6a15;
+  --atencao-wash: #f7ecd6;
+
+  /* Geometria: raios curtos e honestos, no espírito do papel cortado. */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 22px;
+  --r-pill: 999px;
+
+  /* Elevação discreta — o papel encosta na mesa, não flutua. */
+  --lift-1: 0 1px 0 rgba(22, 19, 14, .04), 0 1px 3px rgba(22, 19, 14, .05);
+  --lift-2: 0 12px 40px rgba(22, 19, 14, .16);
+
+  --nav-h: 66px;
+  --tap: 44px;
+
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 72px;
+}
+
+/* Noite: o mesmo caderno sob luz baixa — quente, nunca azulado. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12100c;
+    --paper-2: #1a1713;
+    --paper-3: #232019;
+    --card: #191510;
+    --ink: #f4efe4;
+    --ink-2: #c4bcac;
+    --ink-3: #948b7b;
+    --ink-4: #8b8375;
+    --rule: #2b261e;
+    --rule-strong: #3d372c;
+    --grifo-deep: #b9d431;
+    --grifo-wash: #2a2f10;
+    --alerta: #ef7a63;
+    --alerta-wash: #2e1a15;
+    --feito: #6fb583;
+    --feito-wash: #16241a;
+    --atencao: #d8a44e;
+    --atencao-wash: #2b2011;
+    --lift-1: 0 1px 0 rgba(0, 0, 0, .3), 0 2px 10px rgba(0, 0, 0, .25);
+    --lift-2: 0 16px 48px rgba(0, 0, 0, .55);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12100c;
+  --paper-2: #1a1713;
+  --paper-3: #232019;
+  --card: #191510;
+  --ink: #f4efe4;
+  --ink-2: #c4bcac;
+  --ink-3: #948b7b;
+  --ink-4: #8b8375;
+  --rule: #2b261e;
+  --rule-strong: #3d372c;
+  --grifo-deep: #b9d431;
+  --grifo-wash: #2a2f10;
+  --alerta: #ef7a63;
+  --alerta-wash: #2e1a15;
+  --feito: #6fb583;
+  --feito-wash: #16241a;
+  --atencao: #d8a44e;
+  --atencao-wash: #2b2011;
+  --lift-1: 0 1px 0 rgba(0, 0, 0, .3), 0 2px 10px rgba(0, 0, 0, .25);
+  --lift-2: 0 16px 48px rgba(0, 0, 0, .55);
+}
+
+/* --------------------------------------------------------------------------
+   Pigmentos das disciplinas
+   Nomes de pigmento, não de framework. A cor nunca é o único portador de
+   informação — sempre acompanha rótulo textual (SPEC §41).
+   -------------------------------------------------------------------------- */
+.p-carmim    { --pig: #b8402f; }
+.p-terracota { --pig: #a35c28; }
+.p-ocre      { --pig: #8a6c15; }
+.p-oliva     { --pig: #61701f; }
+.p-musgo     { --pig: #436f47; }
+.p-jade      { --pig: #1f7a67; }
+.p-petroleo  { --pig: #256a7d; }
+.p-indigo    { --pig: #35569b; }
+.p-ultramar  { --pig: #4a49a8; }
+.p-ametista  { --pig: #77459b; }
+.p-magenta   { --pig: #a33a70; }
+.p-grafite   { --pig: #55524b; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .p-carmim    { --pig: #e8705d; }
+  :root:not([data-theme="light"]) .p-terracota { --pig: #dd9257; }
+  :root:not([data-theme="light"]) .p-ocre      { --pig: #cfa53c; }
+  :root:not([data-theme="light"]) .p-oliva     { --pig: #a3b74a; }
+  :root:not([data-theme="light"]) .p-musgo     { --pig: #74ae79; }
+  :root:not([data-theme="light"]) .p-jade      { --pig: #47b39a; }
+  :root:not([data-theme="light"]) .p-petroleo  { --pig: #55a6bd; }
+  :root:not([data-theme="light"]) .p-indigo    { --pig: #7d97e0; }
+  :root:not([data-theme="light"]) .p-ultramar  { --pig: #8a89e6; }
+  :root:not([data-theme="light"]) .p-ametista  { --pig: #b482d9; }
+  :root:not([data-theme="light"]) .p-magenta   { --pig: #de77ac; }
+  :root:not([data-theme="light"]) .p-grafite   { --pig: #9d968a; }
+}
+:root[data-theme="dark"] .p-carmim    { --pig: #e8705d; }
+:root[data-theme="dark"] .p-terracota { --pig: #dd9257; }
+:root[data-theme="dark"] .p-ocre      { --pig: #cfa53c; }
+:root[data-theme="dark"] .p-oliva     { --pig: #a3b74a; }
+:root[data-theme="dark"] .p-musgo     { --pig: #74ae79; }
+:root[data-theme="dark"] .p-jade      { --pig: #47b39a; }
+:root[data-theme="dark"] .p-petroleo  { --pig: #55a6bd; }
+:root[data-theme="dark"] .p-indigo    { --pig: #7d97e0; }
+:root[data-theme="dark"] .p-ultramar  { --pig: #8a89e6; }
+:root[data-theme="dark"] .p-ametista  { --pig: #b482d9; }
+:root[data-theme="dark"] .p-magenta   { --pig: #de77ac; }
+:root[data-theme="dark"] .p-grafite   { --pig: #9d968a; }
+
+/* Lavagem derivada do pigmento — uma fonte de verdade por cor. */
+[class*="p-"] { --pig-wash: color-mix(in srgb, var(--pig) 13%, var(--card)); }
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* Escala de display — Fraunces com WONK, o "desenhado à mão". */
+.h-hero, .h-page, .h-card, .display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -.03em;
+  line-height: 1.04;
+}
+.h-hero {
+  font-size: clamp(2.9rem, 13vw, 4.4rem);
+  font-variation-settings: "opsz" 120, "SOFT" 20, "WONK" 1;
+}
+.h-page {
+  font-size: clamp(1.95rem, 8.5vw, 2.5rem);
+  font-variation-settings: "opsz" 72, "SOFT" 24, "WONK" 1;
+}
+.h-card {
+  font-size: 1.26rem;
+  letter-spacing: -.02em;
+  line-height: 1.14;
+  font-variation-settings: "opsz" 40, "SOFT" 30, "WONK" 1;
+}
+
+/* Micro-rótulo: a voz das seções. */
+.label {
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* Números — horários, dias, contagens — sempre tabulares. */
+.num { font-variant-numeric: tabular-nums; }
+
+/* --------------------------------------------------------------------------
+   O traço de marca-texto — elemento central da identidade.
+   Retângulo de cantos irregulares, levemente inclinado, como caneta rápida.
+   -------------------------------------------------------------------------- */
+.grifo { position: relative; display: inline-block; isolation: isolate; }
+.grifo::before {
+  content: "";
+  position: absolute;
+  inset: 14% -.16em 6% -.2em;
+  background: var(--grifo);
+  clip-path: polygon(.6% 8%, 99.4% 0%, 100% 88%, .2% 100%);
+  transform: rotate(-.5deg);
+  z-index: -1;
+}
+.grifo-sob { position: relative; display: inline-block; }
+.grifo-sob::after {
+  content: "";
+  position: absolute;
+  left: -.08em; right: -.08em; bottom: .02em;
+  height: .32em;
+  background: var(--grifo);
+  clip-path: polygon(0% 22%, 100% 0%, 99% 84%, 1% 100%);
+  z-index: -1;
+}
+
+/* --------------------------------------------------------------------------
+   Marca
+   -------------------------------------------------------------------------- */
+.wordmark {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 60, "SOFT" 20, "WONK" 1;
+  font-weight: 700;
+  letter-spacing: -.045em;
+  font-size: 1.3rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: .4em;
+}
+.wordmark .mark { width: 1.06em; height: 1.06em; flex: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from agenda.core.academic import pigment
 from agenda.models import ClassSchedule, ScheduleException, Subject
 
 
@@ -39,7 +40,7 @@ class ClassOccurrence:
             "end_time": self.end_time,
             "subject_id": self.subject.id,
             "subject": self.subject.display,
-            "color": self.subject.color,
+            "color": pigment(self.subject.color),
             "location": self.location_label,
             "cancelled": self.cancelled,
             "note": self.note,

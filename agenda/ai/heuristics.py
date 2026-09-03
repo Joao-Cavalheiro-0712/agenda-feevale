@@ -220,3 +220,18 @@ def looks_like_schedule(text: str) -> bool:
         return True
     start, end = find_times(t)
     return bool(start and end and re.search(r"\b(tenho|aula|aulas)\b", t))
+
+
+_SEPARADORES = re.compile(r"\s*(?:,|;|\se\s|\+)\s*")
+
+
+def split_materials(text: str) -> list[str]:
+    """Quebra "cartolina, cola e tesoura" em itens de checklist (SPEC §139)."""
+    trecho = re.search(r"\b(?:levar|trazer|comprar)\s+(.{3,120})", fold(text))
+    if not trecho:
+        return []
+    inicio, fim = trecho.span(1)
+    bruto = text[inicio:fim]
+    bruto = re.split(r"\b(?:para|pra|no|na|em|amanha|amanhã|hoje|ate|até)\b", bruto, flags=re.IGNORECASE)[0]
+    itens = [i.strip(" .,;") for i in _SEPARADORES.split(bruto)]
+    return [i for i in itens if len(i) > 1][:10]

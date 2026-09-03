@@ -1,14 +1,23 @@
 {% extends 'base.html' %}
 {% from 'partials/item.html' import event_item %}
 {% block title %}Período · {{ APP_NAME }}{% endblock %}
-{% block heading %}Linha do tempo{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><strong style="font-size:.95rem">Período</strong><span class="spacer"></span>
+<a class="btn sm ghost" href="{{ url_for('pages.month') }}">Mês</a></div></header>
+{% endblock %}
 {% block content %}
-<p class="muted tiny" style="margin:6px 0 14px">Onde estão as semanas mais pesadas do seu período.</p>
-<div class="card">
-  <div class="timeline">
+<div class="pagehead">
+  <p class="label kicker">Linha do tempo</p>
+  <h2 class="h-page">Onde o semestre <span class="grifo-sob">aperta</span></h2>
+  <p class="sub">Cada barra é uma semana. Quanto mais alta, mais coisa concentrada.</p>
+</div>
+
+<div class="card" style="padding:var(--s4)">
+  <div class="timeline" role="img" aria-label="Carga acadêmica por semana ao longo do período">
     {% for week in view.weeks %}
-      <div class="bar {{ 'current' if week.is_current }}" title="{{ week.label }} — {{ week.count }} compromissos">
-        <span class="fill" style="height:{{ (week.intensity * 100)|round|int }}%"></span>
+      <div class="bar {{ 'current' if week.is_current }} {{ 'pesada' if week.load >= view.max_load and not week.is_current }}"
+           title="Semana de {{ week.label }} — {{ week.count }} compromisso(s)">
+        <span class="fill" style="height:{{ [(week.intensity * 100)|round|int, 4]|max }}%"></span>
         <span class="lbl">{{ week.label[:2] }}</span>
       </div>
     {% endfor %}
@@ -17,8 +26,11 @@
 
 {% for week in view.weeks if week['items'] %}
   <section class="section">
-    <header><h3>Semana de {{ week.label }}</h3>{% if week.load >= view.max_load %}<span class="tag warning">semana crítica</span>{% endif %}</header>
-    {% for card in week['items'] %}{{ event_item(card) }}{% endfor %}
+    <header>
+      <h3>Semana de {{ week.label }}</h3>
+      {% if week.load >= view.max_load %}<span class="tag atencao pull">semana crítica</span>{% endif %}
+    </header>
+    {% for card in week['items'] %}{{ event_item(card, show_date=True) }}{% endfor %}
   </section>
 {% endfor %}
 {% endblock %}

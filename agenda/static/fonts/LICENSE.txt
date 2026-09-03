@@ -1,0 +1,11 @@
+Fraunces — SIL Open Font License 1.1
+  Undercase Type · Phaedra Charles · Flavia Zimbardi
+  https://github.com/undercasetype/Fraunces
+
+Space Grotesk — SIL Open Font License 1.1
+  Florian Karsten
+  https://github.com/floriankarsten/space-grotesk
+
+Cópias auto-hospedadas (subsets latin e latin-ext) para não depender de CDN
+externa: nenhuma requisição a terceiros ao abrir o app e primeira renderização
+mais rápida.

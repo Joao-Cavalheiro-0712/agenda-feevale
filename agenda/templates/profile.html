@@ -1,78 +1,145 @@
 {% extends 'base.html' %}
+{% from 'partials/icons.html' import icon, mark %}
 {% block title %}Perfil · {{ APP_NAME }}{% endblock %}
-{% block heading %}Perfil{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><strong style="font-size:.95rem">Perfil</strong></div></header>
+{% endblock %}
 {% block content %}
-<form method="post" class="card" style="margin-top:8px">
+<div class="pagehead">
+  <p class="label kicker">{{ current_user.email }}</p>
+  <h2 class="h-page">{{ current_user.name or 'Sua conta' }}</h2>
+</div>
+
+<form method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <label class="field"><span>Nome</span><input type="text" name="name" value="{{ current_user.name }}"></label>
-  <label class="field"><span>Fuso horário</span><input type="text" name="timezone" value="{{ current_user.timezone }}"></label>
-  <label class="field"><span>Tema</span>
-    <select name="theme" onchange="setTheme(this.value)">
-      {% for value, label in [('system','Sistema'),('light','Claro'),('dark','Escuro')] %}
-        <option value="{{ value }}" {{ 'selected' if current_user.theme == value }}>{{ label }}</option>
-      {% endfor %}
-    </select>
+  <div class="row">
+    <label class="field"><span>Fuso horário</span><input type="text" name="timezone" value="{{ current_user.timezone }}"></label>
+    <label class="field"><span>Tema</span>
+      <select name="theme" onchange="setTheme(this.value)">
+        {% for value, label in [('system','Do sistema'),('light','Claro'),('dark','Escuro')] %}
+          <option value="{{ value }}" {{ 'selected' if current_user.theme == value }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <label style="display:flex;gap:var(--s3);align-items:flex-start;margin:0 0 var(--s5);cursor:pointer">
+    <input type="checkbox" id="push-toggle" style="margin-top:2px;flex:none">
+    <span>
+      <strong style="font-size:.92rem;display:block">Avisos no celular</strong>
+      <span class="help" style="margin-top:2px" id="push-status">Receber lembrete mesmo com o app fechado.</span>
+    </span>
   </label>
-  <label class="field"><span>Lembretes (dias antes, separados por vírgula)</span>
+
+  <label class="field">
+    <span>Lembretes</span>
     <input type="text" name="reminder_days" value="{{ current_user.reminder_days }}">
-    <span class="help">Padrão: 7 dias e 1 dia antes. Se a atividade for cadastrada em cima da hora, aplico só o que ainda dá tempo.</span>
+    <span class="help">Dias de antecedência, separados por vírgula. Padrão 7 e 1. Se a atividade for cadastrada em cima da hora, aplico só o que ainda dá tempo.</span>
   </label>
-  <label style="display:flex;gap:10px;align-items:flex-start;margin:6px 0 14px;cursor:pointer">
-    <input type="checkbox" name="auto_create_enabled" {{ 'checked' if current_user.auto_create_enabled }} style="width:20px;height:20px;accent-color:var(--accent)">
-    <span><strong style="font-size:.92rem">Criar automaticamente quando eu tiver certeza</strong>
-      <span class="help">Com confiança alta eu já salvo e deixo o botão de desfazer. Desligando, eu sempre pergunto antes.</span></span>
+  <label style="display:flex;gap:var(--s3);align-items:flex-start;margin:0 0 var(--s5);cursor:pointer">
+    <input type="checkbox" name="auto_create_enabled" {{ 'checked' if current_user.auto_create_enabled }} style="margin-top:2px;flex:none">
+    <span>
+      <strong style="font-size:.92rem;display:block">Criar sozinho quando eu tiver certeza</strong>
+      <span class="help" style="margin-top:2px">Com confiança alta eu já salvo e deixo o botão de desfazer. Desligado, eu sempre pergunto antes.</span>
+    </span>
   </label>
   <button class="btn block" type="submit">Salvar</button>
 </form>
 
 <section class="section">
   <header><h3>Canais</h3></header>
-  <div class="card">
-    {% if links %}
-      {% for link in links %}
-        <div class="tiny" style="margin-bottom:6px">{{ link.channel|capitalize }} · {{ link.phone_e164 }} <span class="tag success">conectado</span></div>
-      {% endfor %}
-      <form method="post" action="{{ url_for('pages.disconnect') }}" style="margin-top:8px">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="btn ghost sm" type="submit">Desvincular WhatsApp</button>
-      </form>
-    {% else %}
-      <p class="tiny muted" style="margin:0 0 10px">
-        Conecte o WhatsApp para mandar áudio, foto e cronograma sem abrir o app.
-        {% if not whatsapp_configured %}<br><em>(o número oficial ainda não está configurado neste ambiente)</em>{% endif %}
-      </p>
-      <a class="btn block" href="{{ url_for('pages.connect') }}">Conectar WhatsApp</a>
-    {% endif %}
+  {% if links %}
+    {% for link in links %}
+      <div class="item">
+        <span class="rail" style="background:var(--feito)"></span>
+        <span class="time empty" style="font-size:.72rem">{{ link.channel }}</span>
+        <span class="body"><span class="title">{{ link.phone_e164 }}</span>
+          <span class="meta"><span class="tag feito">conectado</span></span></span>
+        <span></span>
+      </div>
+    {% endfor %}
+    <form method="post" action="{{ url_for('pages.disconnect') }}" style="margin-top:var(--s4)">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="link" type="submit">Desvincular WhatsApp</button>
+    </form>
+  {% else %}
+    <p class="tiny muted" style="margin:0 0 var(--s4)">
+      Conecte o WhatsApp para mandar áudio, foto e cronograma sem abrir o app.
+      {% if not whatsapp_configured %}<br><em>O número oficial ainda não está configurado neste ambiente.</em>{% endif %}
+    </p>
+    <a class="btn ghost block" href="{{ url_for('pages.connect') }}">{{ icon('whatsapp') }} Conectar WhatsApp</a>
+  {% endif %}
+</section>
+
+<section class="section">
+  <header><h3>Plano</h3><a href="{{ url_for('pages.plans_page') }}">ver planos</a></header>
+  <div class="item">
+    <span class="rail" style="background:var(--grifo)"></span>
+    <span class="time empty" style="font-size:.72rem">{{ plano.tier|lower }}</span>
+    <span class="body">
+      <span class="title">{{ plano.name }}</span>
+      <span class="meta"><span>{{ plano.tagline }}</span></span>
+    </span>
+    <span></span>
   </div>
 </section>
 
 <section class="section">
   <header><h3>Contextos de estudo</h3></header>
   {% for item in contexts %}
-    <div class="item"><div class="rail" style="background:var(--accent)"></div>
-      <div class="body"><div class="title">{{ item.title }}</div>
-        <div class="meta"><span>{{ item.subtitle or 'sem detalhes' }}</span>{% if item.is_active %}<span class="tag success">ativo</span>{% endif %}</div></div>
+    <div class="item">
+      <span class="rail" style="background:{{ 'var(--ink)' if item.is_active else 'var(--rule-strong)' }}"></span>
+      <span class="time empty" style="font-size:.72rem">{{ item.period_label or '—' }}</span>
+      <span class="body"><span class="title">{{ item.title }}</span>
+        <span class="meta"><span>{{ item.subtitle or 'sem detalhes' }}</span>
+          {% if item.is_active %}<span class="tag marca">atual</span>{% endif %}</span></span>
+      <span></span>
     </div>
   {% endfor %}
-  <a class="btn ghost block" href="{{ url_for('pages.onboarding') }}" style="margin-top:8px">Adicionar outro contexto</a>
+  <div class="stack g4" style="margin-top:var(--s4)">
+    <a class="btn ghost block" href="{{ url_for('pages.onboarding') }}">Adicionar outro contexto</a>
+    <a class="btn ghost block" href="{{ url_for('pages.periods_page') }}">Períodos letivos</a>
+  </div>
+</section>
+
+<section class="section">
+  <header><h3>Calendário e família</h3></header>
+  <div class="stack g4">
+    {% if calendar_url %}
+      <div class="card">
+        <p class="label" style="margin:0 0 var(--s2)">Link do calendário (.ics)</p>
+        <p class="tiny muted" style="margin:0 0 var(--s3);word-break:break-all">{{ calendar_url }}</p>
+        <p class="help" style="margin:0 0 var(--s3)">Cole em Google Calendar, Apple Calendar ou Outlook. Quem tiver este link vê sua agenda — trate como senha.</p>
+        <form method="post" action="{{ url_for('pages.calendar_revoke') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="link" type="submit" style="color:var(--alerta);border-color:transparent">Revogar link</button>
+        </form>
+      </div>
+    {% else %}
+      <form method="post" action="{{ url_for('pages.calendar_subscribe') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn ghost block" type="submit">Gerar link do calendário</button>
+      </form>
+    {% endif %}
+    <a class="btn ghost block" href="{{ url_for('pages.family_page') }}">Conta família</a>
+  </div>
 </section>
 
 <section class="section">
   <header><h3>Seus dados</h3></header>
-  <div class="card">
-    <p class="tiny muted" style="margin:0 0 10px">Você pode levar seus dados embora ou apagar tudo quando quiser.</p>
-    <div class="stack">
-      <a class="btn ghost block" href="{{ url_for('api.export_data') }}" download>Exportar meus dados (JSON)</a>
-      <form method="post" action="{{ url_for('auth.delete_account') }}" onsubmit="return confirm('Excluir sua conta e todos os dados?')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="btn ghost block" type="submit" style="color:var(--danger)">Excluir minha conta</button>
-      </form>
-      <form method="post" action="{{ url_for('auth.logout') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="btn soft block" type="submit">Sair</button>
-      </form>
-    </div>
+  <p class="tiny muted" style="margin:0 0 var(--s4)">São seus. Leve embora ou apague quando quiser.</p>
+  <div class="stack g4">
+    <a class="btn ghost block" href="{{ url_for('api.export_data') }}" download>Exportar tudo (JSON)</a>
+    <a class="btn ghost block" href="{{ url_for('pages.security_page') }}">Segurança e dispositivos</a>
+    <form method="post" action="{{ url_for('auth.logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn soft block" type="submit">Sair</button>
+    </form>
   </div>
 </section>
-<p class="tiny muted center" style="margin-bottom:30px">{{ APP_NAME }} v{{ version }}</p>
+
+<p class="tiny muted center" style="margin:var(--s6) 0 var(--s7)">
+  <span class="wordmark" style="font-size:.9rem;opacity:.6">{{ mark() }}{{ APP_NAME }}</span>
+  <br>versão {{ version }}
+</p>
 {% endblock %}

@@ -1,11 +1,14 @@
 {% extends 'base.html' %}
-{% block title %}Offline · {{ APP_NAME }}{% endblock %}
-{% block heading %}Sem conexão{% endblock %}
+{% from 'partials/icons.html' import art, mark %}
+{% block title %}Sem conexão · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><span class="wordmark">{{ mark() }}{{ APP_NAME }}</span></div></header>
+{% endblock %}
 {% block content %}
-<div class="card empty" style="margin-top:24px">
-  <div class="art">📶</div>
+<div class="empty" style="padding-top:var(--s8)">
+  {{ art('offline') }}
   <h4>Você está offline.</h4>
-  <p>As telas que você já abriu continuam disponíveis. Assim que a conexão voltar, eu sincronizo.</p>
-  <div class="actions"><button class="btn" type="button" onclick="location.reload()">Tentar de novo</button></div>
+  <p>As telas que você já abriu continuam aqui. Quando a conexão voltar, eu sincronizo sozinho.</p>
+  <div class="actions"><button class="btn ghost" type="button" onclick="location.reload()">Tentar de novo</button></div>
 </div>
 {% endblock %}

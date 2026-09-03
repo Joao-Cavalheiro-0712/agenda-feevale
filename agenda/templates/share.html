@@ -1,32 +1,38 @@
 {% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
 {% block title %}{{ collection.title }} · {{ APP_NAME }}{% endblock %}
-{% block heading %}Turma compartilhada{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><span class="wordmark">{{ mark() }}{{ APP_NAME }}</span></div></header>
+{% endblock %}
 {% block content %}
-<div class="card" style="margin-top:8px">
-  <h2 style="margin:0 0 4px;font-size:1.35rem;letter-spacing:-.02em">{{ collection.title }}</h2>
-  {% if snapshot.teacher %}<p class="muted tiny" style="margin:0">Professor(a) {{ snapshot.teacher }}</p>{% endif %}
-  {% for schedule in snapshot.schedules %}
-    <p class="tiny muted" style="margin:2px 0 0">{{ schedule.weekday }} · {{ schedule.start_time }}–{{ schedule.end_time }}</p>
-  {% endfor %}
-  <p style="margin:12px 0 0;font-size:.95rem">{{ snapshot['events']|length }} atividades já cadastradas</p>
+<div class="pagehead">
+  <p class="label kicker">Um colega compartilhou</p>
+  <h2 class="h-page">{{ collection.title }}</h2>
+  <p class="sub">
+    {% if snapshot.teacher %}{{ snapshot.teacher }} · {% endif %}
+    {% for schedule in snapshot.schedules %}{{ schedule.weekday }} {{ schedule.start_time }}{% if not loop.last %} · {% endif %}{% endfor %}
+  </p>
 </div>
 
 <section class="section">
-  <header><h3>O que vem junto</h3></header>
+  <header><h3>Vem junto</h3><span class="count num">{{ snapshot['events']|length }}</span></header>
   {% for item in snapshot['events'][:12] %}
-    <div class="item"><div class="rail" style="background:var(--border-strong)"></div>
-      <div class="time empty" style="min-width:56px;font-size:.78rem">{{ item.date[8:10] }}/{{ item.date[5:7] }}</div>
-      <div class="body"><div class="title">{{ item.title }}</div></div></div>
+    <div class="item">
+      <span class="rail" style="background:var(--rule-strong)"></span>
+      <span class="time empty num" style="font-size:.76rem">{{ item.date[8:10] }}/{{ item.date[5:7] }}</span>
+      <span class="body"><span class="title">{{ item.title }}</span></span>
+      <span></span>
+    </div>
   {% endfor %}
 </section>
 
 {% if logged_in %}
-  <form method="post" style="margin-bottom:30px">
+  <form method="post" style="margin-bottom:var(--s7)">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button class="btn block" type="submit">Adicionar à minha agenda</button>
-    <p class="help">Você escolhe adicionar — nada é copiado sem sua confirmação.</p>
+    <button class="btn marca block" type="submit">Adicionar à minha agenda</button>
+    <p class="help">Você escolhe adicionar — nada entra na sua agenda sem confirmação.</p>
   </form>
 {% else %}
-  <a class="btn block" href="{{ url_for('auth.register') }}">Criar conta e adicionar</a>
+  <a class="btn marca block" href="{{ url_for('auth.register') }}" style="margin-bottom:var(--s7)">Criar conta e adicionar</a>
 {% endif %}
 {% endblock %}

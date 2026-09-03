@@ -36,10 +36,24 @@ def user_tz(user: User) -> ZoneInfo:
         return config.TZ
 
 
-def offsets_for(event: Event, user: User, *, smart: bool = True) -> list[int]:
-    """Quais antecedências aplicar a este evento."""
-    if smart and event.type in SMART_OFFSETS:
+def offsets_for(
+    event: Event, user: User, *, smart: bool = True, education_type: str = ""
+) -> list[int]:
+    """Quais antecedências aplicar a este evento.
+
+    Prioridade: preferência explícita do usuário > perfil por tipo de evento >
+    perfil do nível de ensino > padrão do sistema. Criança do fundamental
+    precisa de aviso na véspera; doutorando precisa de 30 dias.
+    """
+    from agenda.core.profiles import profile_for
+
+    personalizado = user.reminder_days.strip() != "7,1"
+    if personalizado and user.reminder_offsets():
+        base = user.reminder_offsets()
+    elif smart and event.type in SMART_OFFSETS:
         base = SMART_OFFSETS[event.type]
+    elif education_type:
+        base = list(profile_for(education_type).reminder_offsets)
     else:
         base = user.reminder_offsets() or config.DEFAULT_REMINDER_DAYS
     return sorted({o for o in base if o >= 0}, reverse=True)
@@ -85,8 +99,15 @@ def schedule_reminders(
     if event.status in ("COMPLETED", "CANCELLED"):
         return []
 
+    education_type = ""
+    if event.education_context_id:
+        from agenda.models import EducationContext
+
+        context = db.get(EducationContext, event.education_context_id)
+        education_type = context.type if context else ""
+
     created: list[EventReminder] = []
-    for offset in offsets_for(event, user):
+    for offset in offsets_for(event, user, education_type=education_type):
         moment = reminder_moment(event, offset, tz)
         if moment <= now:
             continue  # antecedência já passou — não avisamos no passado

@@ -1,13 +1,13 @@
-# Planno — planner acadêmico multimodal
+# Grifo — planner acadêmico multimodal
 
-> Você manda. Ele organiza.
+> Você manda. Ele grifa.
 
 Cronograma em PDF, foto do quadro, print do portal ou um áudio de dez segundos
 saindo da aula: tudo vira uma agenda estruturada, com lembrete na hora certa.
 O estudante não monta planner — ele conta o que recebeu.
 
 Funciona como **PWA mobile-first** e como **bot de WhatsApp**, com o mesmo
-núcleo de regras nos dois canais.
+núcleo de regras nos dois canais — da educação infantil ao doutorado.
 
 ---
 
@@ -29,6 +29,12 @@ núcleo de regras nos dois canais.
   por tipo (prova: 7/3/1; material: véspera e no dia).
 * **Compartilhar com a turma**: link `/join/CÓDIGO` que o colega adiciona à
   agenda dele — com confirmação, sem cópia silenciosa.
+* **Acompanhar em família**: responsável entra por convite, com permissões
+  separadas para ver agenda, adicionar compromisso e receber lembrete.
+* **Levar para o calendário**: link `.ics` para Google, Apple e Outlook.
+* **Estudar distribuído**: blocos de estudo antes das provas, sempre separados
+  do que é obrigatório.
+* **Notas e média**: peso por avaliação e quanto falta para fechar o período.
 
 Sem chave de IA o produto continua funcionando: um interpretador heurístico em
 português cobre os fluxos principais (é o piso de qualidade medido pelo golden
@@ -49,11 +55,15 @@ Crie a conta em `/criar-conta`, escolha o momento de estudos e comece a mandar
 coisas. Com `GEMINI_API_KEY` definida, entram transcrição de áudio, leitura de
 imagem e extração de documentos por IA.
 
-### Testes
+### Testes e ferramentas
 
 ```bash
-pytest -q            # 125 testes
-python -m pyflakes agenda wsgi.py tests
+pytest -q                        # 229 testes
+python -m pyflakes agenda tests  # análise estática
+python -m agenda.cli check       # sanidade da configuração
+python -m agenda.cli secret      # gera SECRET_KEY forte
+python -m agenda.cli vapid       # gera as chaves do Web Push
+python -m agenda.cli migrate     # aplica as migrations
 ```
 
 O golden dataset (`tests/golden/dataset.jsonl`) é versionado: **nunca** altere
@@ -83,20 +93,68 @@ requisições são recusadas.
 
 ---
 
+## Um produto, cada nível do seu jeito
+
+O banco é um só; o que muda é o **perfil do nível de ensino**
+(`agenda/core/profiles.py`), que define vocabulário, tipos de atividade, campos
+do cadastro, ordem da tela inicial, lembretes padrão e recursos ligados.
+
+| Nível | Vocabulário | Período letivo | Tela inicial começa por |
+|---|---|---|---|
+| Educação infantil | levar para a escola, evento | anual | o que levar |
+| Fundamental I | tema de casa, material | bimestre | o que levar |
+| Fundamental II | tarefa, trabalho | bimestre | hoje |
+| Ensino médio | lista de exercícios, redação, simulado | trimestre | hoje |
+| Cursinho | simulado, revisão | contínuo | hoje |
+| Técnico | prática de laboratório, entrega técnica | trimestre / módulo | hoje |
+| Graduação | trabalho, artigo, seminário | semestre | hoje |
+| Pós / MBA | entrega, encontro, TCC | módulo | hoje |
+| Mestrado | artigo, qualificação, orientação | semestre | hoje |
+| Doutorado | tese, banca, submissão | semestre | hoje |
+| Idiomas | homework, teste oral | módulo | hoje |
+
+Também dá para ter **mais de um contexto ao mesmo tempo** (faculdade + curso de
+inglês) e virar o período sem perder nada: o anterior fica arquivado e
+pesquisável, e as matérias podem ser copiadas para o novo.
+
+## Planos
+
+| Plano | Preço | Inclui |
+|---|---|---|
+| Grátis | R$ 0 | agenda completa, 3 documentos e 30 capturas por mês |
+| Estudante | R$ 19,90/mês | WhatsApp, 100 documentos, planejador de estudos, calendário |
+| Família | R$ 34,90/mês | tudo do Estudante + até 5 estudantes com responsáveis |
+| Institucional | sob contrato | uso ilimitado, turmas oficiais |
+
+Os limites são **entitlements** (`agenda/core/billing.py`), não condicionais
+espalhados: cada recurso pergunta "posso?" a um lugar só. A cobrança tem
+provedor plugável — ligar o gateway é configuração, não reescrita.
+
+## Segurança
+
+Isolamento entre contas com escopo obrigatório e falha fechada, sessões
+revogáveis com token só em hash, bloqueio progressivo de login, CSP com nonce
+(sem `unsafe-inline` em scripts), validação de upload por magic bytes,
+allowlist contra SSRF e separação explícita entre dado e instrução nos prompts.
+
+Detalhes e como verificar: [`docs/SEGURANCA.md`](docs/SEGURANCA.md).
+
 ## Como está organizado
 
 ```
 agenda/
-  core/       regras determinísticas — datas, recorrência, lembretes,
-              duplicados, motor de ações, planner   (fonte de verdade)
+  core/       regras determinísticas — datas, recorrência, lembretes, períodos,
+              perfis por nível, escopo/isolamento, motor de ações, planner,
+              planos, família, notas, estudo   (fonte de verdade)
   ai/         interpretação — provedores plugáveis, prompts versionados,
-              contexto seletivo, heurística de reserva
+              contexto seletivo, heurística de reserva, onboarding por voz
   ingest/     pipeline documental — extração nativa → visão só onde precisa
-  channels/   WhatsApp Cloud API e Telegram
+  channels/   WhatsApp Cloud API, Telegram e Web Push
   jobs/       workers: lembretes, reconciliação, retenção de mídia
-  web/        páginas, API JSON e webhooks
-docs/         ARQUITETURA.md e COBERTURA-SPEC.md
-tests/        125 testes + golden dataset versionado
+  web/        páginas, API JSON, webhooks e tempo real (SSE)
+migrations/   Alembic — schema versionado
+docs/         ARQUITETURA.md, SEGURANCA.md e COBERTURA-SPEC.md
+tests/        229 testes + golden dataset versionado
 ```
 
 Duas regras guiam tudo:
@@ -148,5 +206,10 @@ Veja `.env.example`. As essenciais:
 | `DATABASE_URL` | Postgres (sem ela, SQLite local) |
 | `GEMINI_API_KEY` | áudio, visão e extração por IA |
 | `WHATSAPP_*` | canal oficial do WhatsApp |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push |
 | `TIMEZONE`, `REMINDER_DAYS`, `REMINDER_HOUR` | comportamento dos lembretes |
 | `FEATURE_*` | liga/desliga recursos gradualmente |
+
+O schema é versionado com Alembic e aplicado no start (`Procfile`). Em produção
+o app **não** cria tabelas sozinho: divergência de schema tem que aparecer, não
+ser silenciada.

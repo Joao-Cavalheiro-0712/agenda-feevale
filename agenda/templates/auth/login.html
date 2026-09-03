@@ -1,12 +1,19 @@
 {% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
 {% block title %}Entrar · {{ APP_NAME }}{% endblock %}
-{% block heading %}Entrar{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><a class="wordmark" href="{{ url_for('pages.home') }}">{{ mark() }}{{ APP_NAME }}</a></div></header>
+{% endblock %}
 {% block content %}
-<form method="post" style="margin-top:22px;max-width:380px">
+<div class="pagehead" style="padding-top:var(--s7)">
+  <p class="label kicker">Bem-vindo de volta</p>
+  <h2 class="h-page">Entrar</h2>
+</div>
+<form method="post" style="max-width:380px">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <label class="field"><span>E-mail</span><input type="email" name="email" required autocomplete="email" autofocus></label>
   <label class="field"><span>Senha</span><input type="password" name="password" required autocomplete="current-password"></label>
   <button class="btn block" type="submit">Entrar</button>
 </form>
-<p class="tiny muted" style="margin-top:16px">Não tem conta? <a href="{{ url_for('auth.register') }}" style="color:var(--accent-text);font-weight:600">Criar agora</a></p>
+<p class="tiny muted" style="margin-top:var(--s5)">Ainda não tem conta? <a href="{{ url_for('auth.register') }}" class="link">Criar agora</a></p>
 {% endblock %}

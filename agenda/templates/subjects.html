@@ -1,44 +1,54 @@
 {% extends 'base.html' %}
+{% from 'partials/icons.html' import art %}
 {% block title %}Matérias · {{ APP_NAME }}{% endblock %}
-{% block heading %}Matérias{% endblock %}
-{% block topbar_actions %}<button class="btn sm" type="button" data-sheet="new-subject">Nova</button>{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><strong style="font-size:.95rem">Matérias</strong><span class="spacer"></span>
+<button class="btn sm" type="button" data-sheet="new-subject">Nova</button></div></header>
+{% endblock %}
 {% block content %}
-{% if context %}<p class="tiny muted" style="margin:6px 0 14px">{{ context.title }}{% if context.subtitle %} · {{ context.subtitle }}{% endif %}</p>{% endif %}
+{% if context %}
+  <div class="pagehead">
+    <p class="label kicker">{{ context.subtitle or 'Seus estudos' }}</p>
+    <h2 class="h-page">{{ context.title }}</h2>
+  </div>
+{% endif %}
 
 {% if items %}
   {% for subject in items %}
-    <a class="item c-{{ subject.color }}" href="{{ url_for('pages.subject_detail', subject_id=subject.id) }}">
-      <div class="rail"></div>
-      <div class="body">
-        <div class="title">{{ subject.name }}</div>
-        <div class="meta">
+    <a class="item p-{{ subject.color|pigmento }}" href="{{ url_for('pages.subject_detail', subject_id=subject.id) }}">
+      <span class="rail"></span>
+      <span class="time empty" style="font-size:.7rem;letter-spacing:.1em;text-transform:uppercase">{{ subject.color|pigmento }}</span>
+      <span class="body">
+        <span class="title">{{ subject.name }}</span>
+        <span class="meta">
           {% if subject.teacher %}<span>{{ subject.teacher.name }}</span>{% endif %}
-          {% if subject.default_location %}<span>· {{ subject.default_location.label }}</span>{% endif %}
-          {% if subject.status != 'ACTIVE' %}<span class="tag plain">{{ subject.status|lower }}</span>{% endif %}
-        </div>
-      </div>
+          {% if subject.default_location %}<span class="sep">·</span><span>{{ subject.default_location.label }}</span>{% endif %}
+          {% if subject.status != 'ACTIVE' %}<span class="tag">{{ {'COMPLETED':'concluída','ARCHIVED':'arquivada','DROPPED':'trancada'}[subject.status] }}</span>{% endif %}
+        </span>
+      </span>
+      <span></span>
     </a>
   {% endfor %}
 {% else %}
-  <div class="card empty">
-    <div class="art">📚</div>
-    <h4>Nenhuma matéria ainda.</h4>
-    <p>Cadastre uma, envie a grade de horários ou me conte falando.</p>
+  <div class="empty" style="padding-top:var(--s7)">
+    {{ art('sem-materia') }}
+    <h4>Nenhuma matéria por aqui.</h4>
+    <p>Cadastre uma, mande a grade de horários ou simplesmente me conte falando.</p>
     <div class="actions">
-      <button class="btn" type="button" data-sheet="new-subject">Cadastrar matéria</button>
-      <a class="btn ghost" href="{{ url_for('pages.documents') }}">Enviar grade</a>
+      <button class="btn marca" type="button" data-sheet="new-subject">Cadastrar matéria</button>
+      <a class="link" href="{{ url_for('pages.documents') }}">Enviar a grade</a>
     </div>
   </div>
 {% endif %}
 
-<div class="sheet" id="new-subject" role="dialog" aria-modal="true" aria-label="Nova matéria">
+<div class="sheet" id="new-subject" role="dialog" aria-modal="true" aria-labelledby="nova-materia">
   <div class="grabber"></div>
-  <h3>Nova matéria</h3>
+  <h3 id="nova-materia">Nova matéria</h3>
   <form method="post" action="{{ url_for('pages.create_subject') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label class="field"><span>Nome</span><input type="text" name="name" required placeholder="Direito Constitucional I"></label>
     <div class="row">
-      <label class="field"><span>Apelido curto</span><input type="text" name="short_name" placeholder="Constitucional"></label>
+      <label class="field"><span>Apelido</span><input type="text" name="short_name" placeholder="Constitucional"></label>
       <label class="field"><span>Professor(a)</span><input type="text" name="teacher_name" list="teachers"></label>
     </div>
     <datalist id="teachers">{% for teacher in teachers %}<option value="{{ teacher.name }}">{% endfor %}</datalist>
@@ -46,7 +56,11 @@
       <label class="field"><span>Prédio</span><input type="text" name="location_name" placeholder="Prédio Azul"></label>
       <label class="field"><span>Sala</span><input type="text" name="room" placeholder="302"></label>
     </div>
-    <label class="field"><span>Outros apelidos (separados por vírgula)</span><input type="text" name="aliases" placeholder="const, constitucional 1"></label>
+    <label class="field">
+      <span>Como você chama ela</span>
+      <input type="text" name="aliases" placeholder="const, consti, constitucional 1">
+      <span class="help">Separe por vírgula. Uso esses apelidos para entender quando você fala com pressa.</span>
+    </label>
     <button class="btn block" type="submit">Salvar</button>
   </form>
 </div>

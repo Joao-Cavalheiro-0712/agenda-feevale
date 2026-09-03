@@ -1,45 +1,57 @@
 {% extends 'base.html' %}
-{% from 'partials/icons.html' import icon %}
+{% from 'partials/icons.html' import icon, art %}
 {% block title %}Documentos · {{ APP_NAME }}{% endblock %}
-{% block heading %}Documentos{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><strong style="font-size:.95rem">Documentos</strong></div></header>
+{% endblock %}
 {% block content %}
-<form method="post" enctype="multipart/form-data" class="card" style="margin-top:8px">
+<div class="pagehead">
+  <p class="label kicker">Importar</p>
+  <h2 class="h-page">Joga <span class="grifo-sob">tudo</span> aqui</h2>
+  <p class="sub">Cronograma, plano de ensino, grade de horários, calendário acadêmico. Você revisa antes de eu salvar qualquer coisa.</p>
+</div>
+
+<form method="post" enctype="multipart/form-data" data-dropzone-form>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <strong>Já tem seus cronogramas?</strong>
-  <p class="tiny muted" style="margin:4px 0 12px">Joga tudo aqui: PDF, Word, planilha, print ou foto. Você revisa antes de eu salvar.</p>
-  <label class="field">
-    <span class="sr-only">Arquivos</span>
-    <input type="file" name="files" multiple accept=".pdf,.doc,.docx,.xlsx,.csv,.txt,image/*" required
-           style="border:2px dashed var(--border);background:var(--surface-2);padding:16px;border-radius:var(--r-md)">
+  <label class="dropzone" for="files-input" data-dropzone>
+    {{ icon('documento') }}
+    <strong>Solte os arquivos aqui</strong>
+    <small>ou toque para escolher · PDF, Word, Excel, CSV e fotos</small>
+    <span class="lista tiny" data-file-list hidden></span>
   </label>
-  <button class="btn block" type="submit">Enviar</button>
+  <input id="files-input" class="sr-only" type="file" name="files" multiple
+         accept=".pdf,.doc,.docx,.xlsx,.csv,.txt,image/*" required>
+  <button class="btn marca block" type="submit" style="margin-top:var(--s4)">Enviar</button>
 </form>
 
 {% if items %}
   <section class="section">
-    <header><h3>Enviados</h3></header>
+    <header><h3>Já enviados</h3><span class="count num">{{ items|length }}</span></header>
     {% for document, summary in items %}
       <a class="item" href="{{ url_for('pages.document_review', document_id=document.id) }}">
-        <div class="rail" style="background:var(--border-strong)"></div>
-        <div class="body">
-          <div class="title">{{ document.filename }}</div>
-          <div class="meta">
-            {% if document.status == 'IMPORTED' %}<span class="tag success">✓ Importado</span>
-            {% elif document.status == 'NEEDS_REVIEW' %}<span class="tag warning">{{ summary.needs_review }} para revisar</span>
-            {% elif document.status == 'FAILED' %}<span class="tag danger">Falhou</span>
-            {% else %}<span class="tag plain">{{ document.status|lower }}</span>{% endif %}
-            <span>· {{ summary.events }} atividades</span>
-            {% if summary.schedules %}<span>· {{ summary.schedules }} aulas</span>{% endif %}
-          </div>
-        </div>
+        <span class="rail" style="background:var(--rule-strong)"></span>
+        <span class="time empty" style="font-size:.72rem">{{ document.created_at.strftime('%d/%m') }}</span>
+        <span class="body">
+          <span class="title">{{ document.filename }}</span>
+          <span class="meta">
+            {% if document.status == 'IMPORTED' %}<span class="tag feito">importado</span>
+            {% elif document.status == 'NEEDS_REVIEW' %}<span class="tag atencao">{{ summary.needs_review }} para revisar</span>
+            {% elif document.status == 'FAILED' %}<span class="tag alerta">não consegui ler</span>
+            {% elif document.status == 'READY' %}<span class="tag marca">pronto para importar</span>
+            {% else %}<span class="tag">processando</span>{% endif %}
+            {% if summary.events %}<span class="sep">·</span><span><span class="num">{{ summary.events }}</span> atividades</span>{% endif %}
+            {% if summary.schedules %}<span class="sep">·</span><span><span class="num">{{ summary.schedules }}</span> aulas</span>{% endif %}
+          </span>
+        </span>
+        <span></span>
       </a>
     {% endfor %}
   </section>
 {% else %}
-  <div class="card empty">
-    <div class="art">📄</div>
+  <div class="empty">
+    {{ art('sem-documento') }}
     <h4>Nenhum documento ainda.</h4>
-    <p>O jeito mais rápido de montar o semestre inteiro é mandar o cronograma.</p>
+    <p>É o caminho mais rápido para montar o semestre inteiro de uma vez.</p>
   </div>
 {% endif %}
 {% endblock %}

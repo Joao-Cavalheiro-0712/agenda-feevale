@@ -51,7 +51,8 @@ def create(
 
 def deliver(db: Session, user: User, notification: Notification) -> list[str]:
     """Entrega pelos canais disponíveis. In-app é sempre garantido."""
-    from agenda.channels import telegram, whatsapp
+    from agenda.channels import push, telegram, whatsapp
+    from agenda.core import billing, family
 
     channels: list[str] = ["inapp"]
     db.add(
@@ -60,8 +61,40 @@ def deliver(db: Session, user: User, notification: Notification) -> list[str]:
         )
     )
 
+    # Web Push chega mesmo com o app fechado e não depende de plano.
+    if push.can_send(db, user):
+        enviados = push.send(
+            db, user,
+            title=notification.title,
+            body=notification.body,
+            url=f"/evento/{notification.event_id}" if notification.event_id else "/hoje",
+        )
+        db.add(
+            NotificationDelivery(
+                notification_id=notification.id,
+                channel="webpush",
+                status=DeliveryStatus.SENT.value if enviados else DeliveryStatus.FAILED.value,
+            )
+        )
+        if enviados:
+            channels.append("webpush")
+
+    # Responsáveis que pediram para acompanhar recebem uma cópia (SPEC §59).
+    for guardian in family.reminder_recipients(db, user):
+        copia = Notification(
+            user_id=guardian.id,
+            title=notification.title,
+            body=f"{user.name or 'Seu estudante'}: {notification.body}",
+            event_id=None,
+            kind="guardian",
+        )
+        db.add(copia)
+        if push.can_send(db, guardian):
+            push.send(db, guardian, title=copia.title, body=copia.body)
+        channels.append("guardian")
+
     text = f"*{notification.title}*\n{notification.body}"
-    if whatsapp.can_send(db, user):
+    if whatsapp.can_send(db, user) and billing.allows(db, user, billing.CAN_USE_WHATSAPP):
         ok, provider_id, error = whatsapp.send_text(db, user, text)
         db.add(
             NotificationDelivery(

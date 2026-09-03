@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% from 'partials/item.html' import event_item %}
+{% from 'partials/icons.html' import icon, art %}
+{% block title %}{{ estudante.name }} · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.family_page') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.95rem">{{ estudante.name or 'Estudante' }}</strong>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <p class="label kicker">Agenda de</p>
+  <h2 class="h-page">{{ estudante.name or 'Estudante' }}</h2>
+  <p class="sub">Você vê o que ele autorizou. Nada aqui é editável sem permissão.</p>
+</div>
+
+{% if grupos %}
+  {% for grupo in grupos %}
+    <div class="day-head {{ 'today' if grupo.is_today }}">
+      <span class="dnum num">{{ grupo.day }}</span><span class="dwd">{{ grupo.weekday }}</span>
+    </div>
+    {% for card in grupo['items'] %}{{ event_item(card, checkable=False) }}{% endfor %}
+  {% endfor %}
+{% else %}
+  <div class="empty">{{ art('agenda-livre') }}<h4>Nada marcado.</h4><p>Quando aparecer algo na agenda, você vê aqui.</p></div>
+{% endif %}
+{% endblock %}

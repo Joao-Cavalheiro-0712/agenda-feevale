@@ -39,14 +39,42 @@ def utcnow() -> dt.datetime:
 # Enums de domínio
 # --------------------------------------------------------------------------- #
 class EducationType(str, enum.Enum):
-    ELEMENTARY = "ELEMENTARY"
-    MIDDLE_SCHOOL = "MIDDLE_SCHOOL"
-    HIGH_SCHOOL = "HIGH_SCHOOL"
-    TECHNICAL = "TECHNICAL"
-    UNDERGRAD = "UNDERGRAD"
-    POSTGRAD = "POSTGRAD"
-    FREE_COURSE = "FREE_COURSE"
+    """Momento de estudos do usuário. Define todo o vocabulário e a experiência."""
+
+    EARLY_CHILDHOOD = "EARLY_CHILDHOOD"   # educação infantil
+    ELEMENTARY = "ELEMENTARY"             # fundamental — anos iniciais (1º ao 5º)
+    MIDDLE_SCHOOL = "MIDDLE_SCHOOL"       # fundamental — anos finais (6º ao 9º)
+    HIGH_SCHOOL = "HIGH_SCHOOL"           # ensino médio
+    TECHNICAL = "TECHNICAL"               # técnico / profissionalizante
+    PREP_COURSE = "PREP_COURSE"           # cursinho pré-vestibular ou concurso
+    UNDERGRAD = "UNDERGRAD"               # graduação
+    POSTGRAD = "POSTGRAD"                 # especialização / MBA
+    MASTERS = "MASTERS"                   # mestrado
+    DOCTORATE = "DOCTORATE"               # doutorado
+    LANGUAGE_COURSE = "LANGUAGE_COURSE"   # curso de idiomas
+    FREE_COURSE = "FREE_COURSE"           # curso livre
     OTHER = "OTHER"
+
+
+class DegreeKind(str, enum.Enum):
+    """Modalidade da graduação — muda o vocabulário e a duração esperada."""
+
+    BACHELOR = "BACHELOR"          # bacharelado
+    LICENTIATE = "LICENTIATE"      # licenciatura
+    TECHNOLOGIST = "TECHNOLOGIST"  # tecnólogo
+    OTHER = "OTHER"
+
+
+class PeriodKind(str, enum.Enum):
+    """Como a instituição divide o ano letivo."""
+
+    SEMESTER = "SEMESTER"        # 2 por ano — graduação, pós
+    TRIMESTER = "TRIMESTER"      # 3 por ano — técnico, muitas escolas
+    QUADMESTER = "QUADMESTER"    # 4 por ano — quadrimestre
+    BIMESTER = "BIMESTER"        # 4 por ano — fundamental e médio
+    ANNUAL = "ANNUAL"            # 1 por ano — educação infantil, alguns cursos
+    MODULE = "MODULE"            # blocos sequenciais — técnico, idiomas
+    CONTINUOUS = "CONTINUOUS"    # sem divisão — curso livre
 
 
 class EventType(str, enum.Enum):
@@ -184,11 +212,15 @@ class LinkToken(Base):
 # Contexto acadêmico
 # --------------------------------------------------------------------------- #
 class EducationContext(Base):
+    """Um contexto de estudos do usuário — ele pode ter vários ao mesmo tempo
+    (graduação + curso de inglês, médio + técnico)."""
+
     __tablename__ = "education_contexts"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    type: Mapped[str] = mapped_column(String(20), default=EducationType.UNDERGRAD.value)
+    type: Mapped[str] = mapped_column(String(24), default=EducationType.UNDERGRAD.value)
+    degree_kind: Mapped[str] = mapped_column(String(20), default="")
     institution: Mapped[str] = mapped_column(String(200), default="")
     course_name: Mapped[str] = mapped_column(String(200), default="")
     grade_name: Mapped[str] = mapped_column(String(80), default="")
@@ -196,15 +228,20 @@ class EducationContext(Base):
     module: Mapped[str] = mapped_column(String(40), default="")
     class_name: Mapped[str] = mapped_column(String(80), default="")
     shift: Mapped[str] = mapped_column(String(20), default="")  # manha|tarde|noite|integral
+    period_kind: Mapped[str] = mapped_column(String(20), default=PeriodKind.SEMESTER.value)
     period_label: Mapped[str] = mapped_column(String(40), default="")  # ex.: 2026/2
     starts_on: Mapped[dt.date | None] = mapped_column(Date)
     ends_on: Mapped[dt.date | None] = mapped_column(Date)
+    color: Mapped[str] = mapped_column(String(20), default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     user: Mapped[User] = relationship(back_populates="contexts")
     subjects: Mapped[list["Subject"]] = relationship(
+        back_populates="context", cascade="all, delete-orphan"
+    )
+    periods: Mapped[list["AcademicPeriod"]] = relationship(
         back_populates="context", cascade="all, delete-orphan"
     )
 
@@ -214,8 +251,43 @@ class EducationContext(Base):
 
     @property
     def subtitle(self) -> str:
-        bits = [b for b in (self.institution, self.semester or self.module or self.class_name) if b]
+        detail = self.semester or self.module or self.class_name
+        bits = [b for b in (self.institution, detail) if b]
         return " · ".join(bits)
+
+
+class AcademicPeriod(Base):
+    """Um período letivo concreto: 1º semestre de 2026, 2º trimestre, Módulo 3.
+
+    Existir como entidade permite arquivar o passado sem apagar nada (SPEC §132)
+    e responder "quando foi a prova do semestre passado?" (SPEC §133).
+    """
+
+    __tablename__ = "academic_periods"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    education_context_id: Mapped[str] = mapped_column(
+        ForeignKey("education_contexts.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(20), default=PeriodKind.SEMESTER.value)
+    label: Mapped[str] = mapped_column(String(60))          # "2º trimestre"
+    sequence: Mapped[int] = mapped_column(Integer, default=1)  # 1, 2, 3...
+    year: Mapped[int] = mapped_column(Integer, default=0)
+    starts_on: Mapped[dt.date | None] = mapped_column(Date)
+    ends_on: Mapped[dt.date | None] = mapped_column(Date)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    context: Mapped[EducationContext] = relationship(back_populates="periods")
+
+    def contains(self, date: dt.date) -> bool:
+        if self.starts_on and date < self.starts_on:
+            return False
+        if self.ends_on and date > self.ends_on:
+            return False
+        return True
 
 
 class Teacher(Base):
@@ -256,6 +328,9 @@ class Subject(Base):
     education_context_id: Mapped[str] = mapped_column(
         ForeignKey("education_contexts.id", ondelete="CASCADE"), index=True
     )
+    academic_period_id: Mapped[str | None] = mapped_column(
+        ForeignKey("academic_periods.id", ondelete="SET NULL"), index=True
+    )
     name: Mapped[str] = mapped_column(String(200))
     short_name: Mapped[str] = mapped_column(String(60), default="")
     color: Mapped[str] = mapped_column(String(20), default="violet")
@@ -265,6 +340,9 @@ class Subject(Base):
     )
     notes: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(20), default=SubjectStatus.ACTIVE.value)
+    # Notas (SPEC §137): escala e nota de aprovação variam por instituição.
+    grade_scale: Mapped[float] = mapped_column(Float, default=10.0)
+    passing_grade: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     context: Mapped[EducationContext] = relationship(back_populates="subjects")
@@ -349,6 +427,9 @@ class Event(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     education_context_id: Mapped[str | None] = mapped_column(
         ForeignKey("education_contexts.id", ondelete="CASCADE"), index=True
+    )
+    academic_period_id: Mapped[str | None] = mapped_column(
+        ForeignKey("academic_periods.id", ondelete="SET NULL"), index=True
     )
     subject_id: Mapped[str | None] = mapped_column(ForeignKey("subjects.id", ondelete="SET NULL"))
     type: Mapped[str] = mapped_column(String(24), default=EventType.OTHER.value)
@@ -645,3 +726,139 @@ class PushSubscription(Base):
     endpoint: Mapped[str] = mapped_column(Text)
     keys: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# --------------------------------------------------------------------------- #
+# Sessões de acesso (SPEC §78) — permitem revogar dispositivo a dispositivo
+# --------------------------------------------------------------------------- #
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    user_agent: Mapped[str] = mapped_column(String(300), default="")
+    ip_hash: Mapped[str] = mapped_column(String(64), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+    @property
+    def active(self) -> bool:
+        return self.revoked_at is None
+
+
+class LoginAttempt(Base):
+    """Tentativas de login para bloqueio progressivo (SPEC §79, §111)."""
+
+    __tablename__ = "login_attempts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    identity: Mapped[str] = mapped_column(String(160), index=True)  # e-mail normalizado
+    ip_hash: Mapped[str] = mapped_column(String(64), default="")
+    success: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+# --------------------------------------------------------------------------- #
+# Assinaturas e consumo (SPEC §96, §112)
+# --------------------------------------------------------------------------- #
+class PlanTier(str, enum.Enum):
+    FREE = "FREE"
+    STUDENT = "STUDENT"        # plano individual
+    FAMILY = "FAMILY"          # responsável + estudantes
+    INSTITUTION = "INSTITUTION"
+
+
+class SubscriptionStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    TRIALING = "TRIALING"
+    PAST_DUE = "PAST_DUE"
+    CANCELED = "CANCELED"
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    plan: Mapped[str] = mapped_column(String(20), default=PlanTier.FREE.value)
+    status: Mapped[str] = mapped_column(String(20), default=SubscriptionStatus.ACTIVE.value)
+    provider: Mapped[str] = mapped_column(String(30), default="none")
+    external_id: Mapped[str] = mapped_column(String(120), default="")
+    seats: Mapped[int] = mapped_column(Integer, default=1)
+    trial_ends_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    current_period_end: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class UsageCounter(Base):
+    """Consumo mensal por métrica, para aplicar quotas do plano."""
+
+    __tablename__ = "usage_counters"
+    __table_args__ = (
+        UniqueConstraint("user_id", "metric", "period", name="uq_usage_metric_period"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    metric: Mapped[str] = mapped_column(String(40))       # document_imports | ai_messages | ...
+    period: Mapped[str] = mapped_column(String(7))        # "2026-09"
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Conta família (SPEC §59)
+# --------------------------------------------------------------------------- #
+class GuardianLink(Base):
+    """Vínculo responsável ↔ estudante, com permissões explícitas."""
+
+    __tablename__ = "guardian_links"
+    __table_args__ = (
+        UniqueConstraint("guardian_id", "student_id", name="uq_guardian_student"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    guardian_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    student_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    invite_code: Mapped[str] = mapped_column(String(12), unique=True, index=True)
+    invite_email: Mapped[str] = mapped_column(String(200), default="")
+    relationship_label: Mapped[str] = mapped_column(String(40), default="responsável")
+    status: Mapped[str] = mapped_column(String(20), default="PENDING")  # PENDING|ACTIVE|REVOKED
+    can_view_agenda: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_add_events: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_receive_reminders: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    accepted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# --------------------------------------------------------------------------- #
+# Planejamento de estudos (SPEC §93, §94)
+# --------------------------------------------------------------------------- #
+class StudyBlock(Base):
+    __tablename__ = "study_blocks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    event_id: Mapped[str | None] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
+    subject_id: Mapped[str | None] = mapped_column(ForeignKey("subjects.id", ondelete="CASCADE"))
+    local_date: Mapped[dt.date] = mapped_column(Date, index=True)
+    start_time: Mapped[str] = mapped_column(String(5), default="")
+    minutes: Mapped[int] = mapped_column(Integer, default=45)
+    topic: Mapped[str] = mapped_column(String(200), default="")
+    status: Mapped[str] = mapped_column(String(20), default="PLANNED")  # PLANNED|DONE|SKIPPED
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    subject: Mapped[Subject | None] = relationship()

@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon %}
+{% block title %}Notas de {{ subject.name }} · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.subject_detail', subject_id=subject.id) }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.95rem">Notas</strong>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead p-{{ subject.color|pigmento }}">
+  <p class="label kicker" style="color:var(--pig)">{{ subject.name }}</p>
+  <h2 class="h-page">
+    {% if resumo.media is not none %}Média <span class="grifo-sob num">{{ '%.1f'|format(resumo.media) }}</span>
+    {% else %}Sem notas ainda{% endif %}
+  </h2>
+  {% if resumo.necessario is not none %}
+    <p class="sub">Para fechar em {{ resumo.passing_grade }}, você precisa de <strong>{{ '%.1f'|format(resumo.necessario) }}</strong> no que falta.</p>
+  {% endif %}
+</div>
+
+<form method="post" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="row">
+    <label class="field"><span>Escala</span><input type="text" name="grade_scale" value="{{ resumo.escala }}" inputmode="decimal"></label>
+    <label class="field"><span>Nota para passar</span><input type="text" name="passing_grade" value="{{ resumo.passing_grade or '' }}" inputmode="decimal" placeholder="7"></label>
+  </div>
+
+  {% if resumo.eventos %}
+    <hr class="divider">
+    {% for item in resumo.eventos %}
+      <div style="padding:var(--s3) 0;border-bottom:1px solid var(--rule)">
+        <strong style="font-size:.94rem;display:block">{{ item.title }}</strong>
+        <span class="tiny muted num">{{ item.date[8:10] }}/{{ item.date[5:7] }} · vale até {{ item.max_grade }}</span>
+        <div class="row" style="margin-top:var(--s2)">
+          <label class="field" style="margin:0"><span>Nota</span>
+            <input type="text" name="grade_{{ item.id }}" value="{{ item.grade_value if item.grade_value is not none else '' }}" inputmode="decimal"></label>
+          <label class="field" style="margin:0"><span>Peso</span>
+            <input type="text" name="weight_{{ item.id }}" value="{{ item.weight or 1 }}" inputmode="decimal"></label>
+        </div>
+      </div>
+    {% endfor %}
+    <button class="btn block" type="submit" style="margin-top:var(--s4)">Salvar notas</button>
+  {% else %}
+    <p class="tiny muted" style="margin:var(--s4) 0 0">
+      Nenhuma avaliação com valor definido. Ao criar uma prova ou trabalho, informe
+      quanto ela vale — aí a média aparece aqui.
+    </p>
+    <button class="btn block" type="submit" style="margin-top:var(--s4)">Salvar configuração</button>
+  {% endif %}
+</form>
+{% endblock %}

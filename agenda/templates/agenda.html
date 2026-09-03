@@ -1,32 +1,40 @@
 {% extends 'base.html' %}
 {% from 'partials/item.html' import event_item %}
+{% from 'partials/icons.html' import art %}
 {% block title %}Agenda · {{ APP_NAME }}{% endblock %}
-{% block heading %}Agenda{% endblock %}
-{% block topbar_actions %}
-  <a class="btn sm ghost" href="{{ url_for('pages.week') }}">Semana</a>
-  <a class="btn sm ghost" href="{{ url_for('pages.deadlines') }}">Entregas</a>
+{% block topbar %}
+<header class="topbar">
+  <div class="wrap">
+    <strong style="font-size:.95rem;letter-spacing:-.01em">Agenda</strong>
+    <span class="spacer"></span>
+    <a class="btn sm ghost" href="{{ url_for('pages.week') }}">Semana</a>
+    <a class="btn sm ghost" href="{{ url_for('pages.deadlines') }}">Entregas</a>
+  </div>
+</header>
 {% endblock %}
 {% block content %}
 {% if groups %}
   {% set ns = namespace(month='') %}
   {% for group in groups %}
     {% if group.month_label != ns.month %}
-      <div class="month-label">{{ group.month_label }}</div>
+      <p class="month-label">{{ group.month_label }}</p>
       {% set ns.month = group.month_label %}
     {% endif %}
     <div class="day-head {{ 'today' if group.is_today }}">
-      <span class="dnum">{{ group.day }}</span><span class="dwd">{{ group.weekday }}</span>
+      <span class="dnum num">{{ group.day }}</span>
+      <span class="dwd">{{ group.weekday }}</span>
+      {% if group.is_today %}<span class="hoje tag marca">hoje</span>{% endif %}
     </div>
     {% for card in group['items'] %}{{ event_item(card) }}{% endfor %}
   {% endfor %}
 {% else %}
-  <div class="card empty">
-    <div class="art">📭</div>
-    <h4>Sua agenda está livre.</h4>
-    <p>Envie um cronograma ou conte o que você precisa lembrar.</p>
+  <div class="empty" style="padding-top:var(--s8)">
+    {{ art('agenda-livre') }}
+    <h4>Sua agenda está em branco.</h4>
+    <p>Envie um cronograma ou conte o que você precisa lembrar. Eu monto o resto.</p>
     <div class="actions">
-      <a class="btn" href="{{ url_for('pages.documents') }}">Enviar cronograma</a>
-      <button class="btn ghost" type="button" data-sheet="capture-sheet">Falar com o assistente</button>
+      <a class="btn marca" href="{{ url_for('pages.documents') }}">Enviar cronograma</a>
+      <button class="link" type="button" data-sheet="capture-sheet">Contar por texto ou áudio</button>
     </div>
   </div>
 {% endif %}

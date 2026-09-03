@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
+{% block title %}{{ titulo }} · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><a class="wordmark" href="/">{{ mark() }}{{ APP_NAME }}</a></div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead" style="padding-top:var(--s8)">
+  <p class="label kicker num">Erro {{ codigo }}</p>
+  <h2 class="h-page">{{ titulo }}</h2>
+  <p class="sub">{{ detalhe }}</p>
+</div>
+<div class="stack g4" style="max-width:320px">
+  <a class="btn block" href="{{ url_for('pages.home') }}">Voltar para o início</a>
+</div>
+{% endblock %}

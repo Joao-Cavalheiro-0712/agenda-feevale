@@ -1,19 +1,35 @@
 {% extends 'base.html' %}
 {% from 'partials/item.html' import event_item %}
+{% from 'partials/icons.html' import icon %}
 {% block title %}{{ view.month_label }} · {{ APP_NAME }}{% endblock %}
-{% block heading %}{{ view.month_label }} {{ view.year }}{% endblock %}
-{% block topbar_actions %}
-  <a class="btn sm ghost" href="{{ url_for('pages.month', ano=view.prev[0], mes=view.prev[1]) }}" aria-label="Mês anterior">←</a>
-  <a class="btn sm ghost" href="{{ url_for('pages.month', ano=view.next[0], mes=view.next[1]) }}" aria-label="Próximo mês">→</a>
+{% block topbar %}
+<header class="topbar">
+  <div class="wrap">
+    <strong style="font-size:.95rem;letter-spacing:-.01em">Mês</strong>
+    <span class="spacer"></span>
+    <a class="btn sm ghost" href="{{ url_for('pages.week') }}">Semana</a>
+    <a class="btn sm ghost" href="{{ url_for('pages.agenda') }}">Lista</a>
+  </div>
+</header>
 {% endblock %}
 {% block content %}
-<div class="month-grid" style="margin-top:8px">
+<div class="month-nav">
+  <a class="btn sm ghost" href="{{ url_for('pages.month', ano=view.prev[0], mes=view.prev[1]) }}" aria-label="Mês anterior">{{ icon('volta') }}</a>
+  <div class="titulo">
+    <h2 class="h-card" style="margin:0">{{ view.month_label }}</h2>
+    <span class="label num">{{ view.year }}</span>
+  </div>
+  <a class="btn sm ghost" href="{{ url_for('pages.month', ano=view.next[0], mes=view.next[1]) }}" aria-label="Próximo mês">{{ icon('seta') }}</a>
+</div>
+
+<div class="month-grid">
   {% for label in view.weekday_labels %}<div class="head">{{ label }}</div>{% endfor %}
   {% for week in view.weeks %}{% for day in week %}
     <button type="button" class="month-cell {{ 'out' if not day.in_month }} {{ 'today' if day.is_today }}"
-            data-day="{{ day.iso }}" aria-label="{{ day.iso }}, {{ day.count }} compromissos">
-      <span class="n">{{ day.day }}</span>
-      <span class="dots">{% for color in day.colors %}<i class="c-{{ color }}"></i>{% endfor %}</span>
+            data-day="{{ day.iso }}"
+            aria-label="{{ day.day }} — {{ day.count }} compromisso(s)">
+      <span class="n num">{{ day.day }}</span>
+      <span class="dots">{% for color in day.colors %}<i class="p-{{ color }}"></i>{% endfor %}</span>
     </button>
   {% endfor %}{% endfor %}
 </div>
@@ -21,22 +37,39 @@
 {% for week in view.weeks %}{% for day in week %}
   {% if day['items'] %}
     <div class="day-detail" id="dia-{{ day.iso }}" hidden>
-      <div class="day-head"><span class="dnum">{{ day.day }}</span><span class="dwd">{{ view.month_label|upper }}</span></div>
+      <div class="day-head">
+        <span class="dnum num">{{ '%02d' % day.day }}</span>
+        <span class="dwd">{{ view.month_label|upper }}</span>
+      </div>
       {% for card in day['items'] %}{{ event_item(card) }}{% endfor %}
     </div>
   {% endif %}
 {% endfor %}{% endfor %}
 
-<p class="tiny muted center" style="margin-top:16px" id="month-hint">Toque num dia para ver os compromissos.</p>
+<p class="month-hint" id="month-hint">Toque num dia para ver o que tem.</p>
 {% endblock %}
 {% block scripts %}
-<script>
-document.querySelectorAll('.month-cell').forEach(cell => cell.addEventListener('click', () => {
+<script nonce="{{ nonce }}">
+function abrirDia(cell, rolar) {
   document.querySelectorAll('.day-detail').forEach(d => d.hidden = true);
+  document.querySelectorAll('.month-cell').forEach(c => c.setAttribute('aria-expanded', 'false'));
   const target = document.getElementById('dia-' + cell.dataset.day);
   const hint = document.getElementById('month-hint');
-  if (target) { target.hidden = false; hint.hidden = true; target.scrollIntoView({behavior:'smooth', block:'nearest'}); }
-  else { hint.hidden = false; hint.textContent = 'Nada nesse dia.'; }
-}));
+  cell.setAttribute('aria-expanded', String(!!target));
+  if (target) {
+    target.hidden = false;
+    hint.hidden = true;
+    if (rolar) target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else {
+    hint.hidden = false;
+    hint.textContent = 'Nada nesse dia.';
+  }
+}
+document.querySelectorAll('.month-cell').forEach(cell =>
+  cell.addEventListener('click', () => abrirDia(cell, true)));
+
+// Abre o dia de hoje já ao entrar — a resposta mais provável está pronta.
+const hoje = document.querySelector('.month-cell.today');
+if (hoje && document.getElementById('dia-' + hoje.dataset.day)) abrirDia(hoje, false);
 </script>
 {% endblock %}

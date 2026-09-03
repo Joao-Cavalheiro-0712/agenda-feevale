@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import hmac
+import re
 import secrets
 
 import requests
@@ -21,6 +22,34 @@ from agenda.models import ChannelMessage, LinkToken, SourceType, User, UserPhone
 
 API_BASE = "https://graph.facebook.com"
 CHANNEL = "whatsapp"
+
+# A URL da mídia vem da resposta do Graph. Tratamos como não confiável: só
+# baixamos de hosts oficiais, por HTTPS, sem seguir redirecionamento — é o que
+# fecha a porta para SSRF (SPEC §79).
+_MEDIA_HOSTS = (
+    "graph.facebook.com",
+    "lookaside.fbsbx.com",
+)
+_MEDIA_HOST_SUFFIXES = (
+    ".fbcdn.net",
+    ".cdninstagram.com",
+    ".whatsapp.net",
+)
+
+
+def _media_url_permitida(url: str) -> bool:
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme != "https" or not parsed.hostname:
+        return False
+    host = parsed.hostname.lower()
+    if host in _MEDIA_HOSTS:
+        return True
+    return any(host.endswith(sufixo) for sufixo in _MEDIA_HOST_SUFFIXES)
 
 
 def is_configured() -> bool:
@@ -167,11 +196,23 @@ def process(db: Session, message: ChannelMessage) -> str:
     result = assistant.handle_message(
         db, user, text, channel=CHANNEL, source_type=SourceType.WHATSAPP.value, source_id=message.id
     )
+    _notify_open_tabs(user.id, result)
     message.status = "EXECUTED"
     message.processed_at = dt.datetime.now(dt.timezone.utc)
     reply = format_reply(result)
     send_text(db, user, reply)
     return reply
+
+
+def _notify_open_tabs(user_id: str, result: dict) -> None:
+    """Empurra o resultado para as abas abertas do usuário (SPEC §141)."""
+    from agenda.web import realtime
+
+    realtime.publish(
+        user_id,
+        "agenda.changed",
+        {"message": result.get("message", ""), "cards": result.get("cards", [])[:3]},
+    )
 
 
 def _unlinked_reply(db: Session, message: ChannelMessage) -> str:
@@ -287,7 +328,7 @@ def send_text(db: Session, user: User, text: str) -> tuple[bool, str, str]:
 
 def _send_raw(phone: str, text: str) -> tuple[bool, str, str]:
     if not is_configured():
-        print(f"[whatsapp] (simulado) → {phone}: {text[:120]}")
+        print(f"[whatsapp] (simulado) → {phone_utils.mask(phone)}: {len(text)} caracteres")
         return False, "", "WhatsApp não configurado"
     url = f"{API_BASE}/{config.WHATSAPP_API_VERSION}/{config.WHATSAPP_PHONE_NUMBER_ID}/messages"
     try:
@@ -312,22 +353,41 @@ def _send_raw(phone: str, text: str) -> tuple[bool, str, str]:
 
 
 def download_media(media_id: str) -> bytes:
-    """Baixa a mídia pelo endpoint oficial, com limite de tamanho (SPEC §68)."""
+    """Baixa a mídia pelo endpoint oficial (SPEC §68), com todas as travas.
+
+    Limites: id no formato esperado, host na allowlist, HTTPS obrigatório, sem
+    redirecionamento, tamanho máximo e tempo máximo. Qualquer desvio devolve
+    vazio em vez de arriscar uma requisição para onde não devemos ir.
+    """
     if not media_id or not is_configured():
         return b""
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,120}", media_id):
+        return b""
+
     headers = {"Authorization": f"Bearer {config.WHATSAPP_TOKEN}"}
     try:
         meta = requests.get(
-            f"{API_BASE}/{config.WHATSAPP_API_VERSION}/{media_id}", headers=headers, timeout=20
+            f"{API_BASE}/{config.WHATSAPP_API_VERSION}/{media_id}",
+            headers=headers,
+            timeout=20,
+            allow_redirects=False,
         )
         if meta.status_code >= 300:
             return b""
-        url = meta.json().get("url")
-        if not url:
+        url = (meta.json() or {}).get("url") or ""
+        if not _media_url_permitida(url):
+            print("[whatsapp] URL de mídia fora da allowlist; download recusado.")
             return b""
-        response = requests.get(url, headers=headers, timeout=60, stream=True)
+
+        response = requests.get(
+            url, headers=headers, timeout=60, stream=True, allow_redirects=False
+        )
         if response.status_code >= 300:
             return b""
+        tamanho_declarado = response.headers.get("Content-Length")
+        if tamanho_declarado and int(tamanho_declarado) > config.MAX_UPLOAD_BYTES:
+            return b""
+
         chunks: list[bytes] = []
         total = 0
         for chunk in response.iter_content(chunk_size=64 * 1024):
@@ -336,7 +396,7 @@ def download_media(media_id: str) -> bytes:
                 return b""
             chunks.append(chunk)
         return b"".join(chunks)
-    except requests.RequestException:
+    except (requests.RequestException, ValueError):
         return b""
 
 

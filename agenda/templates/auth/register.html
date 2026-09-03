@@ -1,18 +1,33 @@
 {% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
 {% block title %}Criar conta · {{ APP_NAME }}{% endblock %}
-{% block heading %}Criar conta{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><a class="wordmark" href="{{ url_for('pages.home') }}">{{ mark() }}{{ APP_NAME }}</a></div></header>
+{% endblock %}
 {% block content %}
-<form method="post" style="margin-top:22px;max-width:380px">
+<div class="pagehead" style="padding-top:var(--s6)">
+  <p class="label kicker">Leva um minuto</p>
+  <h2 class="h-page">Criar conta</h2>
+</div>
+<form method="post" style="max-width:380px">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label class="field"><span>Como te chamo?</span><input type="text" name="name" value="{{ name|default('') }}" autocomplete="given-name" autofocus></label>
+  <label class="field"><span>Como te chamo</span><input type="text" name="name" value="{{ name|default('') }}" autocomplete="given-name" autofocus></label>
   <label class="field"><span>E-mail</span><input type="email" name="email" value="{{ email|default('') }}" required autocomplete="email"></label>
-  <label class="field"><span>Celular (para usar pelo WhatsApp)</span><input type="tel" name="phone" placeholder="(51) 99999-8888" autocomplete="tel"></label>
-  <label class="field"><span>Senha</span><input type="password" name="password" required minlength="8" autocomplete="new-password"><span class="help">Mínimo de 8 caracteres.</span></label>
+  <label class="field">
+    <span>Celular</span>
+    <input type="tel" name="phone" placeholder="(51) 99999-8888" autocomplete="tel">
+    <span class="help">Só para conectar o WhatsApp depois. Pode deixar em branco.</span>
+  </label>
+  <label class="field">
+    <span>Senha</span>
+    <input type="password" name="password" required minlength="8" autocomplete="new-password">
+    <span class="help">Pelo menos 8 caracteres.</span>
+  </label>
   <input type="hidden" name="timezone" id="tz">
-  <button class="btn block" type="submit">Criar conta</button>
-  <p class="help">Ao criar a conta você concorda com o uso dos seus dados apenas para organizar sua agenda acadêmica. Você pode exportar ou excluir tudo quando quiser.</p>
+  <button class="btn marca block" type="submit">Criar conta</button>
+  <p class="help">Seus dados servem só para organizar sua agenda acadêmica. Você pode exportar ou apagar tudo quando quiser.</p>
 </form>
 {% endblock %}
 {% block scripts %}
-<script>try { document.getElementById('tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {}</script>
+<script nonce="{{ nonce }}">try { document.getElementById('tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {}</script>
 {% endblock %}

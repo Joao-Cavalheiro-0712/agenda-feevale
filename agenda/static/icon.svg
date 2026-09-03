@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
-  <rect width="192" height="192" rx="44" fill="#5b5bd6"/>
-  <rect x="40" y="46" width="112" height="106" rx="18" fill="#fff" opacity=".95"/>
-  <rect x="40" y="46" width="112" height="26" rx="13" fill="#3f3fb8"/>
-  <circle cx="66" cy="38" r="7" fill="#3f3fb8"/><circle cx="126" cy="38" r="7" fill="#3f3fb8"/>
-  <path d="M63 108l16 16 32-34" fill="none" stroke="#5b5bd6" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192" role="img" aria-label="Grifo">
+  <rect width="192" height="192" rx="44" fill="#16130e"/>
+  <path d="M40 62h112" stroke="#faf6ef" stroke-opacity=".3" stroke-width="15" stroke-linecap="round" fill="none"/>
+  <path d="M31 82.5 165 76l2.6 40.5L34.5 123Z" fill="#d8f24b"/>
+  <path d="M40 100h92" stroke="#16130e" stroke-width="15" stroke-linecap="round" fill="none"/>
+  <path d="M40 137h66" stroke="#faf6ef" stroke-opacity=".3" stroke-width="15" stroke-linecap="round" fill="none"/>
 </svg>

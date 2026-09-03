@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon %}
+{% block title %}Planos · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.profile') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.95rem">Planos</strong>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <p class="label kicker">Seu plano: {{ resumo.plan.name }}</p>
+  <h2 class="h-page">Organize sem <span class="grifo-sob">contar arquivo</span></h2>
+  {% if resumo.trial_days_left %}
+    <p class="sub">Teste ativo — faltam {{ resumo.trial_days_left }} dia(s).</p>
+  {% endif %}
+</div>
+
+<div class="card" style="margin-bottom:var(--s6)">
+  <p class="label" style="margin:0 0 var(--s3)">Uso deste mês</p>
+  <div class="resumo">
+    <div class="metrica">
+      <span class="n num">{{ resumo.usage.documentos }}</span>
+      <span class="l">de {{ resumo.usage.documentos_limite if resumo.usage.documentos_limite >= 0 else '∞' }} documentos</span>
+    </div>
+    <div class="metrica">
+      <span class="n num">{{ resumo.usage.mensagens }}</span>
+      <span class="l">de {{ resumo.usage.mensagens_limite if resumo.usage.mensagens_limite >= 0 else '∞' }} capturas</span>
+    </div>
+  </div>
+</div>
+
+{% for plano in planos %}
+  <div class="card" style="margin-bottom:var(--s3);{{ 'border-color:var(--ink);border-width:1.5px' if plano.tier == resumo.plan.tier }}">
+    <div style="display:flex;align-items:baseline;gap:var(--s3);flex-wrap:wrap">
+      <h3 class="h-card" style="margin:0">{{ plano.name }}</h3>
+      {% if plano.tier == resumo.plan.tier %}<span class="tag marca">atual</span>{% endif %}
+      {% if plano.price_month %}
+        <span class="pull num" style="font-weight:700">R$ {{ '%.2f'|format(plano.price_month) }}<span class="tiny muted">/mês</span></span>
+      {% endif %}
+    </div>
+    <p class="tiny muted" style="margin:var(--s2) 0 var(--s3)">{{ plano.tagline }}</p>
+    <ul style="margin:0 0 var(--s4);padding-left:1.1em">
+      {% for item in plano.highlights %}<li class="tiny" style="margin-bottom:4px">{{ item }}</li>{% endfor %}
+    </ul>
+    {% if plano.tier != resumo.plan.tier %}
+      <form method="post" action="{{ url_for('pages.subscribe_plan') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="plan" value="{{ plano.tier }}">
+        <button class="btn {{ 'marca' if plano.price_month else 'ghost' }} block" type="submit">
+          {% if plano.price_month %}Assinar {{ plano.name }}{% else %}Voltar para o grátis{% endif %}
+        </button>
+      </form>
+    {% endif %}
+  </div>
+{% endfor %}
+
+{% if not resumo.subscription.trial_ends_at %}
+  <form method="post" action="{{ url_for('pages.start_trial') }}" style="margin-top:var(--s4)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn ghost block" type="submit">Testar tudo por 14 dias, sem cartão</button>
+  </form>
+{% endif %}
+
+{% if not flag('billing_enabled') %}
+  <p class="help center" style="margin-top:var(--s5)">
+    A cobrança automática ainda não está ligada neste ambiente. Configure o gateway
+    de pagamento para aceitar assinaturas.
+  </p>
+{% endif %}
+
+{% if resumo.subscription.plan != 'FREE' %}
+  <form method="post" action="{{ url_for('pages.cancel_plan') }}" style="margin:var(--s5) 0 var(--s7)">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="link center" type="submit" style="display:block;margin:0 auto">Cancelar assinatura</button>
+  </form>
+{% endif %}
+{% endblock %}

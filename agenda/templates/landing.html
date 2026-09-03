@@ -1,34 +1,79 @@
 {% extends 'base.html' %}
-{% block title %}{{ APP_NAME }} — seu planner acadêmico automático{% endblock %}
-{% block topbar %}{% endblock %}
+{% from 'partials/icons.html' import icon, mark %}
+{% block title %}{{ APP_NAME }} — o planner que se monta sozinho{% endblock %}
+{% block topbar %}
+<header class="topbar">
+  <div class="wrap">
+    <span class="wordmark">{{ mark() }}{{ APP_NAME }}</span>
+    <span class="spacer"></span>
+    <a class="link" href="{{ url_for('auth.login') }}">Entrar</a>
+  </div>
+</header>
+{% endblock %}
 {% block content %}
-<div style="padding:48px 0 32px">
-  <p class="tag" style="background:var(--accent-soft);color:var(--accent-text)">Planner acadêmico com IA</p>
-  <h2 style="font-size:2.1rem;line-height:1.15;letter-spacing:-.035em;margin:14px 0 12px">
-    Você manda.<br>Ele organiza.
-  </h2>
-  <p class="muted" style="font-size:1.02rem;max-width:34ch">
-    Cronograma em PDF, foto do quadro, print do portal ou um áudio de 10 segundos
-    saindo da aula. Vira agenda, com lembrete na hora certa.
+<section style="padding:var(--s7) 0 var(--s6)">
+  <p class="label" style="margin:0 0 var(--s4)">Planner acadêmico · fundamental à pós</p>
+  <h1 class="h-hero" style="margin:0">
+    Você manda.<br><span class="grifo">Ele grifa.</span>
+  </h1>
+  <p style="margin:var(--s5) 0 0;font-size:1.06rem;color:var(--ink-2);max-width:32ch;line-height:1.5">
+    Cronograma em PDF, foto do quadro, print do portal ou dez segundos de áudio
+    saindo da aula. Vira agenda organizada, com lembrete na hora certa.
   </p>
-  <div class="stack" style="margin-top:24px;max-width:320px">
-    <a class="btn block" href="{{ url_for('auth.register') }}">Criar minha conta</a>
+  <div class="stack g4" style="margin-top:var(--s6);max-width:330px">
+    <a class="btn marca block" href="{{ url_for('auth.register') }}">Criar minha conta</a>
     <a class="btn ghost block" href="{{ url_for('auth.login') }}">Já tenho conta</a>
   </div>
-</div>
+</section>
 
-<div class="stack" style="margin-bottom:40px">
-  <div class="card">
-    <strong>Manda o cronograma inteiro</strong>
-    <p class="muted tiny" style="margin:4px 0 0">PDF, Word, planilha ou foto. Eu leio, separo matérias, provas e entregas — e mostro tudo para você revisar antes de salvar.</p>
+<hr class="divider" style="margin:var(--s6) 0">
+
+<section>
+  <p class="label" style="margin-bottom:var(--s5)">Como funciona</p>
+
+  <div class="stack g4">
+    <div>
+      <p class="kind" style="color:var(--ink-4)">01 — Mande</p>
+      <h3 class="h-card" style="margin:var(--s1) 0 var(--s2)">O semestre inteiro de uma vez</h3>
+      <p class="tiny muted" style="margin:0;max-width:40ch">
+        PDF, Word, planilha ou foto. Eu leio, separo matérias, aulas, provas e entregas —
+        e mostro tudo para você conferir antes de salvar.
+      </p>
+    </div>
+    <hr class="divider" style="margin:var(--s3) 0">
+    <div>
+      <p class="kind" style="color:var(--ink-4)">02 — Ou fale</p>
+      <h3 class="h-card" style="margin:var(--s1) 0 var(--s2)">“Trabalho de Civil dia 23, vale 2 pontos”</h3>
+      <p class="tiny muted" style="margin:0;max-width:40ch">
+        Pronto: está na agenda, na matéria certa, com lembrete 7 dias e 1 dia antes.
+        Se eu ficar na dúvida, eu pergunto — não invento data.
+      </p>
+    </div>
+    <hr class="divider" style="margin:var(--s3) 0">
+    <div>
+      <p class="kind" style="color:var(--ink-4)">03 — Sem abrir o app</p>
+      <h3 class="h-card" style="margin:var(--s1) 0 var(--s2)">Tudo isso também pelo WhatsApp</h3>
+      <p class="tiny muted" style="margin:0;max-width:40ch">
+        {% if whatsapp_number %}Fale com {{ whatsapp_number }}.{% else %}Conecte seu número.{% endif %}
+        Texto, áudio, foto e documento — e pergunte “o que eu tenho amanhã?”.
+      </p>
+    </div>
   </div>
-  <div class="card">
-    <strong>Fala, não digita</strong>
-    <p class="muted tiny" style="margin:4px 0 0">“A professora de Civil pediu um trabalho para dia 23, vale 2 pontos.” Pronto: está na agenda, com lembrete 7 dias e 1 dia antes.</p>
+</section>
+
+<section class="section">
+  <div class="card" style="background:var(--ink);color:var(--paper);border:0">
+    <p class="label" style="color:var(--grifo);margin:0 0 var(--s3)">A promessa</p>
+    <p class="h-card" style="margin:0;color:var(--paper)">
+      “Eu mando as coisas e ele organiza tudo para mim.”
+    </p>
+    <p class="tiny" style="margin:var(--s4) 0 0;color:color-mix(in srgb, var(--paper) 65%, transparent)">
+      Nenhuma data é inventada. Toda ação automática pode ser desfeita.
+    </p>
   </div>
-  <div class="card">
-    <strong>Também pelo WhatsApp</strong>
-    <p class="muted tiny" style="margin:4px 0 0">{% if whatsapp_number %}Fale com {{ whatsapp_number }}.{% else %}Conecte seu número e use o app sem abrir o app.{% endif %} Texto, áudio, foto e documento.</p>
-  </div>
-</div>
+</section>
+
+<p class="tiny muted center" style="margin:var(--s6) 0 var(--s7)">
+  {{ APP_NAME }} · seus dados são seus: exporte ou apague quando quiser.
+</p>
 {% endblock %}

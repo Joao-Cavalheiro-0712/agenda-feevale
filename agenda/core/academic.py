@@ -24,23 +24,43 @@ from agenda.models import (
     Teacher,
 )
 
-# Paleta usada para sugerir cor de disciplina (SPEC §40). Nunca é o único
-# portador de informação — sempre acompanha rótulo textual (SPEC §41).
+# Pigmentos das disciplinas (SPEC §40). Nomes de pigmento, não de framework —
+# fazem parte da identidade do Grifo. A cor nunca é o único portador de
+# informação: sempre acompanha rótulo textual (SPEC §41).
 SUBJECT_COLORS = [
-    "violet", "blue", "emerald", "amber", "rose", "cyan",
-    "orange", "indigo", "teal", "pink", "lime", "red",
+    "ultramar", "indigo", "carmim", "ocre", "jade", "magenta",
+    "terracota", "petroleo", "oliva", "ametista", "musgo", "grafite",
 ]
 
-# Dicas por área para a cor não parecer aleatória.
+# Dicas por área para o pigmento não parecer sorteado.
 _COLOR_HINTS = {
-    "matematica": "violet", "calculo": "violet", "algebra": "violet",
-    "portugues": "amber", "literatura": "amber", "redacao": "amber",
-    "historia": "orange", "geografia": "teal", "filosofia": "indigo",
-    "sociologia": "indigo", "biologia": "emerald", "ciencias": "emerald",
-    "quimica": "cyan", "fisica": "blue", "ingles": "rose", "espanhol": "rose",
-    "penal": "red", "civil": "blue", "constitucional": "indigo",
-    "artes": "pink", "educacao fisica": "lime", "programacao": "cyan",
+    "matematica": "ultramar", "calculo": "ultramar", "algebra": "ultramar",
+    "estatistica": "ultramar", "portugues": "ocre", "literatura": "ocre",
+    "redacao": "ocre", "historia": "terracota", "geografia": "jade",
+    "filosofia": "ametista", "sociologia": "ametista", "biologia": "musgo",
+    "ciencias": "musgo", "quimica": "petroleo", "fisica": "indigo",
+    "ingles": "magenta", "espanhol": "magenta", "penal": "carmim",
+    "civil": "indigo", "constitucional": "ultramar", "processual": "petroleo",
+    "artes": "magenta", "educacao fisica": "oliva", "programacao": "petroleo",
+    "eletric": "ocre", "mecanic": "grafite", "contabil": "oliva",
+    "administr": "grafite", "direito": "carmim", "anatomia": "carmim",
 }
+
+# Paleta anterior → pigmentos, para dados criados antes desta identidade.
+_LEGACY_COLORS = {
+    "violet": "ultramar", "blue": "indigo", "emerald": "musgo", "amber": "ocre",
+    "rose": "magenta", "cyan": "petroleo", "orange": "terracota",
+    "indigo": "indigo", "teal": "jade", "pink": "magenta", "lime": "oliva",
+    "red": "carmim", "slate": "grafite",
+}
+
+
+def pigment(color: str | None) -> str:
+    """Normaliza a cor guardada no banco para um pigmento válido."""
+    color = (color or "").strip().lower()
+    if color in SUBJECT_COLORS:
+        return color
+    return _LEGACY_COLORS.get(color, "grafite")
 
 EDUCATION_LABELS = {
     EducationType.ELEMENTARY.value: "Ensino fundamental",
@@ -329,3 +349,48 @@ def upsert_schedule(
     db.add(schedule)
     db.flush()
     return schedule
+
+
+def copy_subject_to_period(db: Session, subject: Subject, period) -> Subject:
+    """Leva uma matéria para o período seguinte, com horários e apelidos.
+
+    Copiamos a estrutura (nome, professor, local, horários), nunca as
+    atividades: o cronograma novo é do período novo.
+    """
+    copia = Subject(
+        user_id=subject.user_id,
+        education_context_id=subject.education_context_id,
+        academic_period_id=period.id,
+        name=subject.name,
+        short_name=subject.short_name,
+        color=subject.color,
+        teacher_id=subject.teacher_id,
+        default_location_id=subject.default_location_id,
+        notes=subject.notes,
+        grade_scale=subject.grade_scale,
+        passing_grade=subject.passing_grade,
+        status=SubjectStatus.ACTIVE.value,
+    )
+    db.add(copia)
+    db.flush()
+    for alias in subject.aliases:
+        add_alias(db, copia, alias.alias)
+    for schedule in db.scalars(
+        select(ClassSchedule).where(
+            ClassSchedule.user_id == subject.user_id,
+            ClassSchedule.subject_id == subject.id,
+            ClassSchedule.active.is_(True),
+        )
+    ).all():
+        upsert_schedule(
+            db, subject.user_id, copia,
+            weekday=schedule.weekday,
+            start_time=schedule.start_time,
+            end_time=schedule.end_time,
+            location_id=schedule.location_id,
+            start_date=period.starts_on,
+            end_date=period.ends_on,
+        )
+    subject.status = SubjectStatus.COMPLETED.value
+    db.flush()
+    return copia

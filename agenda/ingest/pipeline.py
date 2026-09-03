@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import os
+import re
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -34,6 +35,8 @@ from agenda.models import (
     User,
 )
 
+_SAFE_ID = re.compile(r"[A-Za-z0-9-]{8,64}")
+
 STEPS = [
     ("received", "Documento recebido"),
     ("extracted", "Texto extraído"),
@@ -46,9 +49,37 @@ class UploadError(Exception):
     pass
 
 
+# Assinatura esperada por extensão (SPEC §79): a extensão sozinha não vale nada.
+_MAGIC: dict[str, tuple[bytes, ...]] = {
+    ".pdf": (b"%PDF",),
+    ".docx": (b"PK\x03\x04",),
+    ".xlsx": (b"PK\x03\x04",),
+    ".doc": (b"\xd0\xcf\x11\xe0", b"PK\x03\x04"),
+    ".png": (b"\x89PNG\r\n\x1a\n",),
+    ".jpg": (b"\xff\xd8\xff",),
+    ".jpeg": (b"\xff\xd8\xff",),
+    ".webp": (b"RIFF",),
+    ".heic": (b"\x00\x00\x00",),
+}
+
+# Cabeçalhos de executável/script que nunca podem entrar, em qualquer extensão.
+_BLOQUEADOS = (
+    b"MZ",           # PE (Windows)
+    b"\x7fELF",      # ELF (Linux)
+    b"\xca\xfe\xba\xbe",  # Mach-O / class Java
+    b"#!",           # script com shebang
+    b"<?php",
+    b"<script",
+)
+
+
 def validate_upload(filename: str, data: bytes) -> None:
-    """Validação de upload (SPEC §79): extensão, tamanho e conteúdo executável."""
-    ext = os.path.splitext(filename)[1].lower()
+    """Validação de upload (SPEC §79).
+
+    Três camadas: extensão na allowlist, conteúdo compatível com a extensão
+    (magic bytes) e recusa de qualquer coisa com cara de executável ou script.
+    """
+    ext = os.path.splitext(filename or "")[1].lower()
     if ext not in config.ALLOWED_UPLOAD_EXTENSIONS:
         raise UploadError(
             f"Formato não suportado ({ext or 'sem extensão'}). "
@@ -58,17 +89,41 @@ def validate_upload(filename: str, data: bytes) -> None:
         raise UploadError("Arquivo vazio.")
     if len(data) > config.MAX_UPLOAD_BYTES:
         raise UploadError(f"Arquivo maior que {config.MAX_UPLOAD_MB} MB.")
-    # Bloqueia executáveis disfarçados por extensão.
-    if data[:2] in (b"MZ", b"\x7fE") or data[:4] == b"\x7fELF":
-        raise UploadError("Esse arquivo parece um executável e não foi aceito.")
+
+    cabecalho = data[:16]
+    inicio_texto = data[:64].lstrip().lower()
+    for assinatura in _BLOQUEADOS:
+        if cabecalho.startswith(assinatura) or inicio_texto.startswith(assinatura):
+            raise UploadError("Esse arquivo parece um executável ou script e não foi aceito.")
+
+    esperados = _MAGIC.get(ext)
+    if esperados and not any(cabecalho.startswith(m) for m in esperados):
+        raise UploadError(
+            f"O conteúdo do arquivo não corresponde a um {ext.lstrip('.').upper()} válido."
+        )
 
 
 def store_file(user_id: str, document_id: str, filename: str, data: bytes) -> str:
-    folder = os.path.join(config.STORAGE_DIR, user_id)
-    os.makedirs(folder, exist_ok=True)
-    ext = os.path.splitext(filename)[1].lower()
+    """Grava o arquivo dentro da pasta do usuário.
+
+    O nome no disco é derivado de identificadores gerados por nós (uuid do
+    usuário e do documento) e de uma extensão da allowlist — nada que venha do
+    cliente entra no caminho, então não há travessia de diretório possível.
+    """
+    if not _SAFE_ID.fullmatch(user_id) or not _SAFE_ID.fullmatch(document_id):
+        raise UploadError("Identificador inválido.")
+    ext = os.path.splitext(filename or "")[1].lower()
+    if ext not in config.ALLOWED_UPLOAD_EXTENSIONS:
+        raise UploadError("Extensão não permitida.")
+
+    folder = os.path.realpath(os.path.join(config.STORAGE_DIR, user_id))
+    raiz = os.path.realpath(config.STORAGE_DIR)
+    if not folder.startswith(raiz + os.sep):
+        raise UploadError("Caminho de armazenamento inválido.")
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+
     path = os.path.join(folder, f"{document_id}{ext}")
-    with open(path, "wb") as handle:
+    with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as handle:
         handle.write(data)
     return path
 

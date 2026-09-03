@@ -1,17 +1,17 @@
-{% from 'partials/icons.html' import icon %}
+{% from 'partials/icons.html' import icon, mark %}
 <nav class="nav" aria-label="Navegação principal">
-  <div class="brand">{{ APP_NAME }}</div>
-  <a href="{{ url_for('pages.today') }}" class="{{ 'active' if active == 'today' }}" {{ 'aria-current=page' if active == 'today' }}>
-    {{ icon('home') }}<span>Hoje</span>
+  <a class="brand wordmark" href="{{ url_for('pages.today') }}">{{ mark() }}{{ APP_NAME }}</a>
+  <a href="{{ url_for('pages.today') }}" class="{{ 'active' if active == 'today' }}" {% if active == 'today' %}aria-current="page"{% endif %}>
+    {{ icon('hoje') }}<span>Hoje</span>
   </a>
-  <a href="{{ url_for('pages.agenda') }}" class="{{ 'active' if active == 'agenda' }}">
-    {{ icon('calendar') }}<span>Agenda</span>
+  <a href="{{ url_for('pages.agenda') }}" class="{{ 'active' if active == 'agenda' }}" {% if active == 'agenda' %}aria-current="page"{% endif %}>
+    {{ icon('agenda') }}<span>Agenda</span>
   </a>
-  <button type="button" class="fab" data-sheet="capture-sheet" aria-label="Adicionar">{{ icon('plus') }}</button>
-  <a href="{{ url_for('pages.subjects') }}" class="{{ 'active' if active == 'subjects' }}">
-    {{ icon('book') }}<span>Matérias</span>
+  <button type="button" class="fab" data-sheet="capture-sheet" aria-label="Grifar alguma coisa">{{ icon('mais') }}</button>
+  <a href="{{ url_for('pages.subjects') }}" class="{{ 'active' if active == 'subjects' }}" {% if active == 'subjects' %}aria-current="page"{% endif %}>
+    {{ icon('materias') }}<span>Matérias</span>
   </a>
-  <a href="{{ url_for('pages.profile') }}" class="{{ 'active' if active == 'profile' }}">
-    {{ icon('user') }}<span>Perfil</span>
+  <a href="{{ url_for('pages.profile') }}" class="{{ 'active' if active == 'profile' }}" {% if active == 'profile' %}aria-current="page"{% endif %}>
+    {{ icon('perfil') }}<span>Perfil</span>
   </a>
 </nav>

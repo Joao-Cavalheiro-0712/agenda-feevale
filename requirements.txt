@@ -11,3 +11,6 @@ openpyxl==3.1.5
 python-dateutil==2.9.0.post0
 google-genai==0.8.0
 tzdata==2024.2
+alembic==1.13.3
+pywebpush==2.0.0
+cryptography==43.0.1

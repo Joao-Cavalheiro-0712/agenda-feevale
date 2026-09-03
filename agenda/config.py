@@ -26,7 +26,7 @@ def _flag(name: str, default: bool) -> bool:
 # --------------------------------------------------------------------------- #
 ENV = _env("APP_ENV", "development").lower()  # development | staging | production
 IS_PRODUCTION = ENV == "production"
-APP_NAME = _env("APP_NAME", "Planno")
+APP_NAME = _env("APP_NAME", "Grifo")
 PUBLIC_URL = _env("PUBLIC_URL", "").rstrip("/")
 PORT = int(_env("PORT", "8080"))
 
@@ -36,6 +36,8 @@ SECRET_KEY = _env("SECRET_KEY") or _env("WEB_PASSWORD") or "dev-secret-troque-em
 # Banco de dados
 # --------------------------------------------------------------------------- #
 DATABASE_URL = _env("DATABASE_URL", "sqlite:///agenda.db")
+# Só para emergência: em produção o schema deve vir das migrations.
+AUTO_CREATE_TABLES = _flag("AUTO_CREATE_TABLES", False)
 if DATABASE_URL.startswith("postgres://"):  # Railway/Heroku legado
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -88,10 +90,20 @@ WHATSAPP_API_VERSION = _env("WHATSAPP_API_VERSION", "v21.0")
 TELEGRAM_BOT_TOKEN = _env("TELEGRAM_BOT_TOKEN")
 
 # --------------------------------------------------------------------------- #
+# Web Push (SPEC §51) — chaves geradas localmente com `python -m agenda.cli vapid`
+# --------------------------------------------------------------------------- #
+VAPID_PUBLIC_KEY = _env("VAPID_PUBLIC_KEY")
+VAPID_PRIVATE_KEY = _env("VAPID_PRIVATE_KEY")
+VAPID_CONTACT = _env("VAPID_CONTACT", "suporte@grifo.app")
+
+# --------------------------------------------------------------------------- #
 # Uploads (SPEC §79)
 # --------------------------------------------------------------------------- #
 MAX_UPLOAD_MB = int(_env("MAX_UPLOAD_MB", "25"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+# Travas de processamento: documento enorme não pode prender o worker.
+MAX_DOCUMENT_PAGES = int(_env("MAX_DOCUMENT_PAGES", "80"))
+MAX_DOCUMENT_CHARS = int(_env("MAX_DOCUMENT_CHARS", "400000"))
 ALLOWED_UPLOAD_EXTENSIONS = {
     ".pdf", ".doc", ".docx", ".txt", ".md", ".csv", ".xlsx",
     ".jpg", ".jpeg", ".png", ".webp", ".heic",
@@ -126,6 +138,9 @@ def flag(name: str) -> bool:
 # --------------------------------------------------------------------------- #
 RATE_LIMITS = {
     "login": int(_env("RATE_LIMIT_LOGIN", "10")),
+    "register": int(_env("RATE_LIMIT_REGISTER", "5")),
+    "share": int(_env("RATE_LIMIT_SHARE", "20")),
+    "export": int(_env("RATE_LIMIT_EXPORT", "10")),
     "assistant": int(_env("RATE_LIMIT_ASSISTANT", "30")),
     "upload": int(_env("RATE_LIMIT_UPLOAD", "20")),
     "webhook": int(_env("RATE_LIMIT_WEBHOOK", "600")),

@@ -165,16 +165,14 @@ def validate(proposal: ActionProposal) -> None:
 
 
 def owns(db: Session, user: User, model, object_id: str | None):
-    """Checagem de permissão: o objeto precisa ser do usuário (SPEC §26)."""
-    if not object_id:
-        return None
-    obj = db.get(model, object_id)
-    if obj is None:
-        return None
-    owner = getattr(obj, "user_id", None) or getattr(obj, "owner_id", None)
-    if owner != user.id:
-        return None
-    return obj
+    """Checagem de permissão pelo escopo central (SPEC §26).
+
+    Nunca comparamos o dono na mão: a regra de propriedade de cada modelo mora
+    em ``core.scope`` e falha fechada para modelos não declarados.
+    """
+    from agenda.core import scope
+
+    return scope.get(db, model, object_id, user.id)
 
 
 # --------------------------------------------------------------------------- #
@@ -431,7 +429,7 @@ def _handle_create_event(db, user, proposal, record) -> ActionResult:
         source_id=payload.get("source_id"),
         source_reference=payload.get("source_reference"),
         created_by="ai" if proposal.model else "user",
-        checklist=payload.get("checklist"),
+        checklist=events_core.normalize_checklist(payload.get("checklist")),
         weight=payload.get("weight"),
         max_grade=payload.get("max_grade"),
         group_work=bool(payload.get("group_work")),

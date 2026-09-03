@@ -199,9 +199,13 @@ def _interpret_heuristic(db: Session, user: User, text: str, *, channel: str) ->
         confidence += 0.08
     confidence = round(min(confidence, 0.95), 2)
 
+    checklist = (
+        heuristics.split_materials(text) if event_type == EventType.MATERIAL.value else []
+    )
     payload = {
         "title": title,
         "type": event_type,
+        "checklist": [{"text": item, "done": False} for item in checklist] or None,
         "description": (notes + ("\n" if notes and text else "") + text.strip())[:800],
         "date": date.isoformat() if date else None,
         "date_expression": expression,

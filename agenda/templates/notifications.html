@@ -1,29 +1,39 @@
 {% extends 'base.html' %}
-{% block title %}Notificações · {{ APP_NAME }}{% endblock %}
-{% block heading %}Notificações{% endblock %}
-{% block topbar_actions %}<button class="btn sm ghost" type="button" id="read-all">Marcar lidas</button>{% endblock %}
+{% from 'partials/icons.html' import icon, art %}
+{% block title %}Avisos · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.today') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.95rem">Avisos</strong>
+  <span class="spacer"></span>
+  <button class="link" type="button" id="read-all">Marcar lidas</button>
+</div></header>
+{% endblock %}
 {% block content %}
 {% if items %}
   {% for notification in items %}
-    <div class="item" style="{{ 'opacity:.6' if notification.read_at }}">
-      <div class="rail" style="background:{{ 'var(--border-strong)' if notification.read_at else 'var(--accent)' }}"></div>
-      <div class="body">
-        <div class="title">{{ notification.title }}</div>
-        <div class="meta"><span>{{ notification.body|truncate(90) }}</span></div>
-        <div class="tiny muted" style="margin-top:3px">{{ notification.created_at.strftime('%d/%m %H:%M') }}</div>
-      </div>
+    <div class="item" style="{{ 'opacity:.5' if notification.read_at }}">
+      <span class="rail" style="background:{{ 'var(--rule-strong)' if notification.read_at else 'var(--grifo)' }}"></span>
+      <span class="time empty num" style="font-size:.72rem">{{ notification.created_at.strftime('%d/%m') }}</span>
+      <span class="body">
+        <span class="title">{{ notification.title }}</span>
+        <span class="meta"><span>{{ notification.body|truncate(80) }}</span></span>
+      </span>
       {% if notification.event_id %}
         <a class="btn sm ghost" href="{{ url_for('pages.event_detail', event_id=notification.event_id) }}">Ver</a>
-      {% endif %}
+      {% else %}<span></span>{% endif %}
     </div>
   {% endfor %}
 {% else %}
-  <div class="card empty"><div class="art">🔔</div><h4>Nada por aqui ainda.</h4>
-    <p>Assim que algo estiver chegando, eu te aviso — aqui, no WhatsApp e por push.</p></div>
+  <div class="empty" style="padding-top:var(--s8)">
+    {{ art('silencio') }}
+    <h4>Nenhum aviso ainda.</h4>
+    <p>Quando algo estiver chegando, eu te aviso aqui, no WhatsApp e por push.</p>
+  </div>
 {% endif %}
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ nonce }}">
 document.getElementById('read-all').addEventListener('click', async () => {
   await api('/api/notifications/read-all', { method: 'POST' });
   location.reload();

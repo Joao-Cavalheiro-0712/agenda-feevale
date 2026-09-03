@@ -1,50 +1,59 @@
 {% extends 'base.html' %}
 {% from 'partials/item.html' import event_item %}
+{% from 'partials/icons.html' import icon %}
 {% block title %}Semana · {{ APP_NAME }}{% endblock %}
-{% block heading %}Semana{% endblock %}
-{% block topbar_actions %}
-  <a class="btn sm ghost" href="{{ url_for('pages.month') }}">Mês</a>
-  <a class="btn sm ghost" href="{{ url_for('pages.timeline') }}">Período</a>
+{% block topbar %}
+<header class="topbar">
+  <div class="wrap">
+    <strong style="font-size:.95rem;letter-spacing:-.01em">Semana</strong>
+    <span class="spacer"></span>
+    <a class="btn sm ghost" href="{{ url_for('pages.month') }}">Mês</a>
+    <a class="btn sm ghost" href="{{ url_for('pages.timeline') }}">Período</a>
+  </div>
+</header>
 {% endblock %}
 {% block content %}
-<div class="row" style="align-items:center;margin:10px 0 14px">
-  <a class="btn sm ghost" href="{{ url_for('pages.week', inicio=(view.start - one_week).isoformat()) }}">←</a>
-  <div class="center tiny muted">{{ view.start.strftime('%d/%m') }} – {{ view.end.strftime('%d/%m') }}</div>
-  <a class="btn sm ghost" href="{{ url_for('pages.week', inicio=(view.start + one_week).isoformat()) }}">→</a>
+<div class="month-nav">
+  <a class="btn sm ghost" href="{{ url_for('pages.week', inicio=(view.start - one_week).isoformat()) }}" aria-label="Semana anterior">{{ icon('volta') }}</a>
+  <div class="titulo">
+    <p class="label" style="margin:0">Semana</p>
+    <strong class="num" style="font-size:1rem">{{ view.start.strftime('%d/%m') }} – {{ view.end.strftime('%d/%m') }}</strong>
+  </div>
+  <a class="btn sm ghost" href="{{ url_for('pages.week', inicio=(view.start + one_week).isoformat()) }}" aria-label="Próxima semana">{{ icon('seta') }}</a>
 </div>
 
-<div class="chips" role="group" aria-label="Filtros">
+<div class="chips" role="group" aria-label="Filtrar a semana">
   <button class="chip active" data-filter="all" aria-pressed="true">Tudo</button>
-  <button class="chip" data-filter="CLASS">Aulas</button>
-  <button class="chip" data-filter="EXAM">Avaliações</button>
-  <button class="chip" data-filter="deadline">Entregas</button>
+  <button class="chip" data-filter="CLASS" aria-pressed="false">Aulas</button>
+  <button class="chip" data-filter="EXAM" aria-pressed="false">Avaliações</button>
+  <button class="chip" data-filter="deadline" aria-pressed="false">Entregas</button>
 </div>
 
 {% for day in view.days %}
   <div class="day-head {{ 'today' if day.is_today }}">
-    <span class="dnum">{{ day.day }}</span>
-    <span class="dwd">{{ day.weekday|upper }}{% if day.is_today %} · HOJE{% endif %}</span>
+    <span class="dnum num">{{ '%02d' % day.day }}</span>
+    <span class="dwd">{{ day.weekday|upper }}</span>
+    {% if day.is_today %}<span class="hoje tag marca">hoje</span>{% endif %}
   </div>
   {% if day['items'] %}
     {% for card in day['items'] %}
       <div data-type="{{ card.type }}" data-deadline="{{ '1' if card.is_deadline else '0' }}">{{ event_item(card) }}</div>
     {% endfor %}
   {% else %}
-    <p class="tiny muted" style="margin:0 0 8px">Livre.</p>
+    <p class="day-livre">Livre.</p>
   {% endif %}
 {% endfor %}
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ nonce }}">
 document.querySelectorAll('.chip[data-filter]').forEach(chip => chip.addEventListener('click', () => {
-  document.querySelectorAll('.chip[data-filter]').forEach(c => { c.classList.remove('active'); c.setAttribute('aria-pressed','false'); });
-  chip.classList.add('active'); chip.setAttribute('aria-pressed','true');
+  document.querySelectorAll('.chip[data-filter]').forEach(c => { c.classList.remove('active'); c.setAttribute('aria-pressed', 'false'); });
+  chip.classList.add('active'); chip.setAttribute('aria-pressed', 'true');
   const filter = chip.dataset.filter;
   document.querySelectorAll('[data-type]').forEach(node => {
-    const show = filter === 'all'
+    node.hidden = !(filter === 'all'
       || (filter === 'deadline' && node.dataset.deadline === '1')
-      || node.dataset.type === filter;
-    node.hidden = !show;
+      || node.dataset.type === filter);
   });
 }));
 </script>

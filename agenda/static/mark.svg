@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="Grifo">
+  <!-- três linhas de texto; a do meio está grifada -->
+  <path d="M3.2 6.4h17" stroke="#16130e" stroke-opacity=".3" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+  <path d="M1.9 9.05 22.3 8.1l.35 6.2L2.2 15.4Z" fill="#d8f24b"/>
+  <path d="M3.2 12h14.4" stroke="#16130e" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+  <path d="M3.2 17.6h10.6" stroke="#16130e" stroke-opacity=".3" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+</svg>

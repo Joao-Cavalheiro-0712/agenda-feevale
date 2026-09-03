@@ -1,25 +1,51 @@
 {% from 'partials/icons.html' import icon %}
-{% macro event_item(card, checkable=True) %}
-<div class="item c-{{ card.color or 'slate' }} {{ 'done' if card.status == 'COMPLETED' }} {{ 'cancelled' if card.status == 'CANCELLED' }}">
-  <div class="rail"></div>
-  <div class="time {{ 'empty' if not card.time }}">{{ card.time or '—' }}</div>
-  <div class="body">
-    <a class="title" href="{% if card.id and not card.id.startswith('class:') %}{{ url_for('pages.event_detail', event_id=card.id) }}{% else %}{{ url_for('pages.subject_detail', subject_id=card.subject_id) }}{% endif %}">{{ card.title }}</a>
-    <div class="meta">
-      <span class="tag">{{ card.type_label }}</span>
-      {% if card.subject %}<span>{{ card.subject }}</span>{% endif %}
-      {% if card.location %}<span>· {{ card.location }}</span>{% endif %}
-      {% if card.status == 'OVERDUE' %}<span class="tag danger">Atrasado</span>{% endif %}
-      {% if card.note %}<span class="tag warning">{{ card.note }}</span>{% endif %}
-      {% if card.confidence is defined and card.confidence < 0.9 and card.source_type != 'MANUAL' %}
-        <span class="tag plain" title="Extraído automaticamente — confira">confira</span>
+
+{# Linha da pauta. Estrutura fixa: filete de pigmento · horário · conteúdo · marcar #}
+{% macro event_item(card, checkable=True, show_date=False, show_subject=True) %}
+{% set is_class = card.id and card.id.startswith('class:') %}
+<div class="item p-{{ card.color or 'grafite' }} {{ 'done' if card.status == 'COMPLETED' }} {{ 'cancelled' if card.status == 'CANCELLED' }}">
+  <span class="rail"></span>
+  <span class="time num {{ 'empty' if not card.time }}">
+    {%- if card.time -%}{{ card.time }}
+    {%- elif show_date -%}<span class="dia">{{ card.date[8:10] }}/{{ card.date[5:7] }}</span>
+    {%- endif -%}
+  </span>
+  <span class="body">
+    <a class="title" href="{% if is_class %}{{ url_for('pages.subject_detail', subject_id=card.subject_id) }}{% else %}{{ url_for('pages.event_detail', event_id=card.id) }}{% endif %}">{{ card.title }}</a>
+    <span class="meta">
+      <span class="kind">{{ card.type_label }}</span>
+      {% if card.subject and show_subject %}<span>{{ card.subject }}</span>{% endif %}
+      {% if card.location %}<span class="local">{{ card.location }}</span>{% endif %}
+      {% if card.status == 'OVERDUE' %}<span class="tag alerta">Atrasado</span>{% endif %}
+      {% if card.note %}<span class="tag atencao">{{ card.note }}</span>{% endif %}
+      {% if card.confidence is defined and card.confidence < 0.9 and card.source_type not in ('MANUAL', None) %}
+        <span class="tag" title="Extraído automaticamente — vale conferir">confira</span>
       {% endif %}
-    </div>
-  </div>
-  {% if checkable and card.is_deadline and card.id and not card.id.startswith('class:') %}
+    </span>
+  </span>
+  {% if checkable and card.is_deadline and not is_class %}
     <button class="check" type="button" data-event-id="{{ card.id }}"
             aria-pressed="{{ 'true' if card.status == 'COMPLETED' else 'false' }}"
-            aria-label="Marcar {{ card.title }} como concluída">{{ icon('check') }}</button>
+            aria-label="Marcar “{{ card.title }}” como concluída">{{ icon('confere') }}</button>
+  {% else %}
+    <span></span>
   {% endif %}
+</div>
+{% endmacro %}
+
+{# Linha compacta para "próximos": mostra a distância no tempo em vez do horário #}
+{% macro upcoming_item(card) %}
+<div class="item p-{{ card.color or 'grafite' }}">
+  <span class="rail"></span>
+  <span class="time num"><span class="dia">{{ card.date[8:10] }}/{{ card.date[5:7] }}</span></span>
+  <span class="body">
+    <a class="title" href="{{ url_for('pages.event_detail', event_id=card.id) }}">{{ card.title }}</a>
+    <span class="meta">
+      <span class="kind">{{ card.type_label }}</span>
+      {% if card.subject %}<span>{{ card.subject }}</span>{% endif %}
+      <span class="quando">{{ card.when }}</span>
+    </span>
+  </span>
+  <span></span>
 </div>
 {% endmacro %}

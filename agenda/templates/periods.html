@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon %}
+{% block title %}Períodos · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.profile') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.95rem">Períodos</strong>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <p class="label kicker">{{ context.title if context }}</p>
+  <h2 class="h-page">Seus <span class="grifo-sob">{{ kind_label(context.period_kind, plural=True) if context else 'períodos' }}</span></h2>
+  <p class="sub">Nada é apagado quando o período vira: fica arquivado e continua pesquisável.</p>
+</div>
+
+{% for periodo in lista %}
+  <div class="item">
+    <span class="rail" style="background:{{ 'var(--grifo)' if periodo.is_current else 'var(--rule-strong)' }}"></span>
+    <span class="time empty num" style="font-size:.72rem">{{ periodo.year }}</span>
+    <span class="body">
+      <span class="title">{{ periodo.label }}</span>
+      <span class="meta">
+        {% if periodo.starts_on %}<span class="num">{{ periodo.starts_on.strftime('%d/%m') }} – {{ periodo.ends_on.strftime('%d/%m') if periodo.ends_on }}</span>{% endif %}
+        {% if periodo.is_current %}<span class="tag marca">atual</span>{% endif %}
+        {% if periodo.archived %}<span class="tag">arquivado</span>{% endif %}
+      </span>
+    </span>
+    <span></span>
+  </div>
+{% endfor %}
+
+<form method="post" action="{{ url_for('pages.next_period') }}" class="card" style="margin-top:var(--s5)">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <strong>Começar o próximo {{ kind_label(context.period_kind) if context else 'período' }}</strong>
+  <p class="tiny muted" style="margin:var(--s2) 0 var(--s3)">
+    O período atual vai para o arquivo. Suas matérias podem vir junto para você
+    não recadastrar tudo.
+  </p>
+  <label style="display:flex;gap:var(--s2);align-items:center;margin-bottom:var(--s4)">
+    <input type="checkbox" name="copy_subjects" checked><span class="tiny">Copiar as matérias atuais</span>
+  </label>
+  <button class="btn block" type="submit">Virar o período</button>
+</form>
+{% endblock %}

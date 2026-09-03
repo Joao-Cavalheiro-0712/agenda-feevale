@@ -1,28 +1,39 @@
 {% extends 'base.html' %}
-{% block title %}Admin · {{ APP_NAME }}{% endblock %}
-{% block heading %}Painel interno{% endblock %}
+{% block title %}Painel interno · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><strong style="font-size:.95rem">Painel interno</strong></div></header>
+{% endblock %}
 {% block content %}
-<div class="row" style="flex-wrap:wrap;gap:10px;margin-top:8px">
-  {% for label, value in [('Usuários', users|length), ('Documentos', documents|length), ('Chamadas de IA', usage_count), ('Custo IA (US$)', total_cost), ('Custo / usuário', cost_per_user), ('Falhas', failures|length)] %}
-    <div class="card" style="min-width:140px"><div class="tiny muted">{{ label }}</div><strong style="font-size:1.3rem">{{ value }}</strong></div>
+<div class="pagehead">
+  <p class="label kicker">Operação</p>
+  <h2 class="h-page">Números</h2>
+</div>
+
+<div class="resumo" style="row-gap:var(--s5)">
+  {% for label, value in [('Usuários', users|length), ('Documentos', documents|length), ('Chamadas de IA', usage_count),
+                          ('Custo IA US$', total_cost), ('Custo/usuário', cost_per_user), ('Falhas', failures|length)] %}
+    <div class="metrica" style="min-width:96px"><span class="n num">{{ value }}</span><span class="l">{{ label }}</span></div>
   {% endfor %}
 </div>
 
 <section class="section"><header><h3>Feature flags</h3></header>
-  <div class="card tiny">
-    {% for name, enabled in flags.items() %}
-      <div style="display:flex;justify-content:space-between;padding:4px 0">
-        <span>{{ name }}</span><span class="tag {{ 'success' if enabled else 'plain' }}">{{ 'on' if enabled else 'off' }}</span>
-      </div>
-    {% endfor %}
-  </div>
+  {% for name, enabled in flags.items() %}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--s3) 0;border-bottom:1px solid var(--rule)">
+      <span class="tiny">{{ name }}</span><span class="tag {{ 'feito' if enabled else '' }}">{{ 'on' if enabled else 'off' }}</span>
+    </div>
+  {% endfor %}
 </section>
 
 {% if failures %}
 <section class="section"><header><h3>Documentos com falha</h3></header>
   {% for document in failures %}
-    <div class="item"><div class="rail" style="background:var(--danger)"></div>
-      <div class="body"><div class="title">{{ document.filename }}</div><div class="meta tiny">{{ document.error|truncate(120) }}</div></div></div>
+    <div class="item">
+      <span class="rail" style="background:var(--alerta)"></span>
+      <span class="time empty num" style="font-size:.72rem">{{ document.created_at.strftime('%d/%m') }}</span>
+      <span class="body"><span class="title">{{ document.filename }}</span>
+        <span class="meta"><span>{{ document.error|truncate(110) }}</span></span></span>
+      <span></span>
+    </div>
   {% endfor %}
 </section>
 {% endif %}

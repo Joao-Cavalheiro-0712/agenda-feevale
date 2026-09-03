@@ -1,45 +1,62 @@
 {% extends 'base.html' %}
 {% from 'partials/item.html' import event_item %}
+{% from 'partials/icons.html' import icon %}
 {% block title %}{{ subject.name }} · {{ APP_NAME }}{% endblock %}
-{% block heading %}{{ subject.display }}{% endblock %}
-{% block topbar_actions %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.subjects') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <span class="spacer"></span>
   <button class="btn sm ghost" type="button" data-sheet="edit-subject">Editar</button>
+</div></header>
 {% endblock %}
 {% block content %}
-<div class="card c-{{ subject.color }}" style="border-left:4px solid var(--c)">
-  <div class="row" style="gap:18px;flex-wrap:wrap">
-    <div><div class="tiny muted">Próxima aula</div>
-      <strong>{% if view.next_class %}{{ view.next_class.date | date_pt }} · {{ view.next_class.start_time }}{% else %}—{% endif %}</strong></div>
-    <div><div class="tiny muted">Professor</div><strong>{{ subject.teacher.name if subject.teacher else '—' }}</strong></div>
-    <div><div class="tiny muted">Local</div><strong>{{ subject.default_location.label if subject.default_location else '—' }}</strong></div>
+<div class="pagehead p-{{ subject.color|pigmento }}">
+  <p class="label kicker" style="color:var(--pig)">{{ subject.teacher.name if subject.teacher else 'Sem professor cadastrado' }}</p>
+  <h2 class="h-page">{{ subject.name }}</h2>
+</div>
+
+<div class="card marcado p-{{ subject.color|pigmento }}">
+  <div class="resumo">
+    <div class="metrica">
+      <span class="l">Próxima aula</span>
+      <strong style="display:block;margin-top:2px">{% if view.next_class %}<span class="num">{{ view.next_class.date | date_pt }}</span> · <span class="num">{{ view.next_class.start_time }}</span>{% else %}—{% endif %}</strong>
+    </div>
+    <div class="metrica">
+      <span class="l">Local</span>
+      <strong style="display:block;margin-top:2px">{{ subject.default_location.label if subject.default_location else '—' }}</strong>
+    </div>
   </div>
   {% if view.schedules %}
-    <hr class="divider">
-    <div class="tiny muted" style="margin-bottom:6px">Horários</div>
+    <hr class="divider" style="margin:var(--s4) 0">
+    <p class="label" style="margin:0 0 var(--s2)">Horários</p>
     {% for schedule in view.schedules %}
-      <div class="tiny">{{ schedule.weekday }} · {{ schedule.start_time }}–{{ schedule.end_time }}{% if schedule.location %} · {{ schedule.location }}{% endif %}</div>
+      <p class="tiny" style="margin:0 0 2px">{{ schedule.weekday }} · <span class="num">{{ schedule.start_time }}–{{ schedule.end_time }}</span>{% if schedule.location %} · {{ schedule.location }}{% endif %}</p>
     {% endfor %}
   {% endif %}
 </div>
 
 <section class="section">
-  <header><h3>Próximas atividades</h3></header>
+  <header><h3>Pela frente</h3>{% if view.upcoming %}<span class="count num">{{ view.upcoming|length }}</span>{% endif %}</header>
   {% if view.upcoming %}
-    {% for card in view.upcoming %}{{ event_item(card) }}{% endfor %}
+    {% for card in view.upcoming %}{{ event_item(card, show_date=True, show_subject=False) }}{% endfor %}
   {% else %}
-    <p class="tiny muted">Nada marcado ainda para esta matéria.</p>
+    <p class="tiny muted" style="padding:var(--s3) 0">Nada marcado nesta matéria.</p>
   {% endif %}
 </section>
 
 {% if view.past %}
 <section class="section">
   <header><h3>Já passou</h3></header>
-  {% for card in view.past %}{{ event_item(card, checkable=False) }}{% endfor %}
+  {% for card in view.past %}{{ event_item(card, checkable=False, show_date=True, show_subject=False) }}{% endfor %}
 </section>
 {% endif %}
 
+{% if perfil and 'grades' in perfil.features %}
+<a class="btn ghost block" href="{{ url_for('pages.subject_grades', subject_id=subject.id) }}" style="margin-bottom:var(--s5)">Notas e média</a>
+{% endif %}
+
 <section class="section">
-  <header><h3>Horário</h3></header>
+  <header><h3>Adicionar horário</h3></header>
   <form method="post" action="{{ url_for('pages.create_schedule', subject_id=subject.id) }}" class="card">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="row">
@@ -57,30 +74,30 @@
       <label class="field"><span>Prédio</span><input type="text" name="location_name"></label>
       <label class="field"><span>Sala</span><input type="text" name="room"></label>
     </div>
-    <button class="btn block" type="submit">Adicionar horário</button>
+    <button class="btn block" type="submit">Adicionar</button>
   </form>
 </section>
 
 {% if flag('sharing_enabled') %}
-<form method="post" action="{{ url_for('pages.share_subject', subject_id=subject.id) }}" style="margin-bottom:24px">
+<form method="post" action="{{ url_for('pages.share_subject', subject_id=subject.id) }}" style="margin-bottom:var(--s7)">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <button class="btn ghost block" type="submit">Compartilhar com a turma</button>
+  <button class="btn ghost block" type="submit">{{ icon('compartilhar') }} Compartilhar com a turma</button>
 </form>
 {% endif %}
 
-<div class="sheet" id="edit-subject" role="dialog" aria-modal="true" aria-label="Editar matéria">
+<div class="sheet" id="edit-subject" role="dialog" aria-modal="true" aria-labelledby="editar-materia">
   <div class="grabber"></div>
-  <h3>Editar matéria</h3>
+  <h3 id="editar-materia">Editar matéria</h3>
   <form method="post" action="{{ url_for('pages.update_subject', subject_id=subject.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label class="field"><span>Nome</span><input type="text" name="name" value="{{ subject.name }}" required></label>
     <div class="row">
       <label class="field"><span>Apelido</span><input type="text" name="short_name" value="{{ subject.short_name }}"></label>
-      <label class="field"><span>Professor(a)</span><input type="text" name="teacher_name" value="{{ subject.teacher.name if subject.teacher else '' }}" list="teachers"></label>
+      <label class="field"><span>Professor(a)</span><input type="text" name="teacher_name" value="{{ subject.teacher.name if subject.teacher else '' }}" list="teachers-edit"></label>
     </div>
-    <datalist id="teachers">{% for teacher in teachers %}<option value="{{ teacher.name }}">{% endfor %}</datalist>
-    <label class="field"><span>Cor</span>
-      <select name="color">{% for color in colors %}<option value="{{ color }}" {{ 'selected' if color == subject.color }}>{{ color }}</option>{% endfor %}</select>
+    <datalist id="teachers-edit">{% for teacher in teachers %}<option value="{{ teacher.name }}">{% endfor %}</datalist>
+    <label class="field"><span>Pigmento</span>
+      <select name="color">{% for color in colors %}<option value="{{ color }}" {{ 'selected' if color == subject.color|pigmento }}>{{ color }}</option>{% endfor %}</select>
     </label>
     <label class="field"><span>Situação</span>
       <select name="status">

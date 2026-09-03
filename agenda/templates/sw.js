@@ -1,6 +1,14 @@
 /* Service worker do PWA (SPEC §60): shell em cache, agenda offline. */
-const CACHE = "planner-v1";
-const SHELL = ["/static/app.css", "/static/app.js", "/static/icon.svg", "/offline"];
+const CACHE = "grifo-v1";
+const SHELL = [
+  "/static/brand.css",
+  "/static/app.css",
+  "/static/app.js",
+  "/static/icon.svg",
+  "/static/fonts/space-grotesk-latin.woff2",
+  "/static/fonts/fraunces-latin.woff2",
+  "/offline",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));

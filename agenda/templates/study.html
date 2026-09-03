@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon, art %}
+{% block title %}Plano de estudo · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.today') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.95rem">Plano de estudo</strong>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <p class="label kicker">Antes das provas</p>
+  <h2 class="h-page">Estudo <span class="grifo-sob">distribuído</span></h2>
+  <p class="sub">Blocos sugeridos a partir das suas provas e entregas. São sugestões: nunca se misturam com o que é obrigatório.</p>
+</div>
+
+{% if not liberado %}
+  <div class="card">
+    <p class="tiny muted" style="margin:0 0 var(--s3)">O planejador faz parte dos planos pagos.</p>
+    <a class="btn marca block" href="{{ url_for('pages.plans_page') }}">Ver planos</a>
+  </div>
+{% else %}
+  <form method="post" action="{{ url_for('pages.study_generate') }}" class="card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field">
+      <span>Quanto tempo por dia</span>
+      <select name="minutes_per_day">
+        <option value="45">45 minutos</option>
+        <option value="90" selected>1h30</option>
+        <option value="120">2 horas</option>
+        <option value="180">3 horas</option>
+      </select>
+    </label>
+    <p class="label" style="margin:0 0 var(--s2)">Dias que você consegue estudar</p>
+    <div class="row" style="gap:var(--s2);margin-bottom:var(--s4)">
+      {% for indice, dia in [(0,'Seg'),(1,'Ter'),(2,'Qua'),(3,'Qui'),(4,'Sex'),(5,'Sáb'),(6,'Dom')] %}
+        <label style="flex:0 0 auto;display:flex;gap:4px;align-items:center;font-size:.8rem">
+          <input type="checkbox" name="weekdays" value="{{ indice }}" checked style="width:18px;height:18px">{{ dia }}
+        </label>
+      {% endfor %}
+    </div>
+    <button class="btn marca block" type="submit">Montar meu plano</button>
+  </form>
+
+  {% if propostas and not blocos %}
+    <section class="section">
+      <header><h3>Proposta</h3><span class="count num">{{ propostas|length }}</span></header>
+      <p class="tiny muted" style="margin:0 0 var(--s3)">Isto ainda não está na sua agenda.</p>
+      {% for proposta in propostas[:8] %}
+        <div class="item">
+          <span class="rail" style="background:var(--rule-strong)"></span>
+          <span class="time num"><span class="dia">{{ proposta.local_date.strftime('%d/%m') }}</span></span>
+          <span class="body">
+            <span class="title">{{ proposta.topic }}</span>
+            <span class="meta"><span class="kind">Estudo</span><span>{{ proposta.minutes }} min</span></span>
+          </span>
+          <span></span>
+        </div>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {% if blocos %}
+    <section class="section">
+      <header><h3>No seu plano</h3><span class="count num">{{ blocos|length }}</span></header>
+      {% for bloco in blocos %}
+        <div class="item p-{{ bloco.color }}">
+          <span class="rail"></span>
+          <span class="time num"><span class="dia">{{ bloco.date_label }}</span></span>
+          <span class="body">
+            <span class="title">{{ bloco.topic }}</span>
+            <span class="meta"><span class="kind">Estudo</span><span>{{ bloco.minutes }} min</span>{% if bloco.subject %}<span>{{ bloco.subject }}</span>{% endif %}</span>
+          </span>
+          <button class="check" type="button" data-study-id="{{ bloco.id }}" aria-pressed="false"
+                  aria-label="Marcar bloco como estudado">{{ icon('confere') }}</button>
+        </div>
+      {% endfor %}
+      <form method="post" action="{{ url_for('pages.study_clear') }}" style="margin-top:var(--s4)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link" type="submit">Limpar o plano</button>
+      </form>
+    </section>
+  {% elif not propostas %}
+    <div class="empty">
+      {{ art('tudo-feito') }}
+      <h4>Nada para estudar por enquanto.</h4>
+      <p>Quando aparecer prova ou trabalho grande na agenda, eu monto os blocos.</p>
+    </div>
+  {% endif %}
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ nonce }}">
+document.querySelectorAll('[data-study-id]').forEach(botao => botao.addEventListener('click', async () => {
+  const feito = botao.getAttribute('aria-pressed') !== 'true';
+  botao.setAttribute('aria-pressed', String(feito));
+  botao.closest('.item')?.classList.toggle('done', feito);
+  await api(`/api/study/${botao.dataset.studyId}/complete`, { method: 'POST', json: { done: feito } });
+}));
+</script>
+{% endblock %}

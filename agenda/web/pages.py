@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
+import secrets
 
 from flask import (
     Blueprint,
@@ -12,18 +14,34 @@ from flask import (
     redirect,
     render_template,
     request,
+    session as flask_session,
     url_for,
 )
 from sqlalchemy import select
 
 from agenda import config
 from agenda.channels import whatsapp
-from agenda.core import academic, notifications, planner
-from agenda.core.academic import EDUCATION_LABELS
-from agenda.core.events import event_card, refresh_statuses, type_label
+from agenda.core import (
+    academic,
+    billing,
+    calendar_export,
+    family,
+    grades,
+    notifications,
+    periods,
+    planner,
+    profiles,
+    scope,
+    sessions,
+    study,
+)
+from agenda.core.events import event_card, refresh_statuses
 from agenda.ingest import pipeline
 from agenda.models import (
     AiUsage,
+    DegreeKind,
+    GuardianLink,
+    LinkToken,
     Document,
     EducationContext,
     EducationType,
@@ -31,11 +49,13 @@ from agenda.models import (
     EventType,
     Location,
     Notification,
+    PeriodKind,
     SharedCollection,
     Subject,
     SubjectStatus,
     Teacher,
     User,
+    UserPhone,
 )
 from agenda.security import share_code
 from agenda.web.deps import (
@@ -48,19 +68,6 @@ from agenda.web.deps import (
 )
 
 bp = Blueprint("pages", __name__)
-
-# Tipos oferecidos na UI conforme o nível educacional (SPEC §4, §47).
-TYPES_BY_EDUCATION: dict[str, list[str]] = {
-    EducationType.ELEMENTARY.value: ["HOMEWORK", "MATERIAL", "EXAM", "PROJECT", "READING", "SCHOOL_EVENT", "REMINDER"],
-    EducationType.MIDDLE_SCHOOL.value: ["HOMEWORK", "MATERIAL", "EXAM", "ASSIGNMENT", "PRESENTATION", "READING", "PROJECT", "SCHOOL_EVENT", "REMINDER"],
-    EducationType.HIGH_SCHOOL.value: ["EXAM", "SIMULATION", "ASSIGNMENT", "HOMEWORK", "PAPER", "PRESENTATION", "PROJECT", "READING", "MATERIAL", "REMINDER"],
-    EducationType.TECHNICAL.value: ["EXAM", "LAB", "ASSIGNMENT", "PROJECT", "PRESENTATION", "INTERNSHIP", "PAPER", "MATERIAL", "ADMINISTRATIVE", "REMINDER"],
-    EducationType.UNDERGRAD.value: ["EXAM", "ASSIGNMENT", "PAPER", "SEMINAR", "PRESENTATION", "READING", "LAB", "PROJECT", "INTERNSHIP", "ADMINISTRATIVE", "REMINDER"],
-    EducationType.POSTGRAD.value: ["PAPER", "SEMINAR", "PRESENTATION", "READING", "PROJECT", "EXAM", "ADMINISTRATIVE", "REMINDER"],
-    EducationType.FREE_COURSE.value: ["ASSIGNMENT", "PROJECT", "PRESENTATION", "READING", "EXAM", "REMINDER"],
-    EducationType.OTHER.value: ["EXAM", "ASSIGNMENT", "HOMEWORK", "MATERIAL", "READING", "REMINDER"],
-}
-
 
 def _greeting(user) -> str:
     """Saudação conforme a hora local do estudante."""
@@ -80,21 +87,21 @@ def _context():
 
 
 def _ui_types(context) -> list[tuple[str, str]]:
-    keys = TYPES_BY_EDUCATION.get(
-        context.type if context else EducationType.UNDERGRAD.value,
-        TYPES_BY_EDUCATION[EducationType.UNDERGRAD.value],
-    )
-    return [(key, type_label(key, context.type if context else "")) for key in keys]
+    """Tipos de atividade oferecidos, no vocabulário do nível (SPEC §47)."""
+    return profiles.offered_types(context.type if context else None)
 
 
 def _shell(**extra):
     user = current_user()
     context = _context()
+    perfil = profiles.profile_of_context(context) if context else profiles.profile_for(None)
     return {
         "context": context,
         "contexts": academic.list_contexts(db(), user.id) if user else [],
         "subjects": academic.list_subjects(db(), user.id, context_id=context.id if context else None),
         "ui_types": _ui_types(context),
+        "perfil": perfil,
+        "periodo": periods.current_period(db(), context) if context else None,
         "unread": notifications.unread_count(db(), user.id) if user else 0,
         **extra,
     }
@@ -116,14 +123,26 @@ def home():
 @bp.route("/onboarding", methods=["GET", "POST"])
 @login_required
 def onboarding():
+    """Escolha do nível + apenas os campos que fazem sentido para ele (SPEC §6)."""
     user = current_user()
     if request.method == "POST":
         education_type = request.form.get("type") or EducationType.UNDERGRAD.value
         if education_type not in {t.value for t in EducationType}:
             education_type = EducationType.OTHER.value
+        perfil = profiles.profile_for(education_type)
+
+        period_kind = request.form.get("period_kind") or perfil.default_period_kind
+        if period_kind not in {k.value for k in PeriodKind}:
+            period_kind = perfil.default_period_kind
+
+        degree_kind = request.form.get("degree_kind") or ""
+        if degree_kind not in {d.value for d in DegreeKind}:
+            degree_kind = ""
+
         context = EducationContext(
             user_id=user.id,
             type=education_type,
+            degree_kind=degree_kind,
             institution=(request.form.get("institution") or "").strip()[:200],
             course_name=(request.form.get("course_name") or "").strip()[:200],
             grade_name=(request.form.get("grade_name") or "").strip()[:80],
@@ -131,27 +150,81 @@ def onboarding():
             module=(request.form.get("module") or "").strip()[:40],
             class_name=(request.form.get("class_name") or "").strip()[:80],
             shift=(request.form.get("shift") or "").strip()[:20],
-            period_label=(request.form.get("period_label") or "").strip()[:40],
+            period_kind=period_kind,
             is_active=True,
         )
-        for field, attribute in (("starts_on", "starts_on"), ("ends_on", "ends_on")):
+        for field in ("starts_on", "ends_on"):
             raw = request.form.get(field)
             if raw:
                 try:
-                    setattr(context, attribute, dt.date.fromisoformat(raw))
+                    setattr(context, field, dt.date.fromisoformat(raw))
                 except ValueError:
                     pass
         db().add(context)
-        academic.set_active_context(db(), user.id, context.id)
-        user.onboarding_done = True
         db().flush()
-        flash("Tudo certo! Agora me conta o que você precisa lembrar.", "success")
+        academic.set_active_context(db(), user.id, context.id)
+        periods.ensure_periods(db(), context)
+        user.onboarding_done = True
+        # Perfis tipicamente de crianças começam sem automação silenciosa (SPEC §80).
+        if profiles.is_minor_profile(education_type):
+            user.auto_create_enabled = False
+        db().flush()
+        flash("Tudo certo. Agora me conta o que você precisa lembrar.", "success")
         return redirect(url_for("pages.today"))
 
     return render_template(
         "onboarding.html",
-        education_options=[(t.value, EDUCATION_LABELS[t.value]) for t in EducationType],
+        education_options=[(key, profiles.PROFILES[key]) for key in profiles.ONBOARDING_ORDER],
+        period_labels=periods.PERIOD_LABELS,
+        degree_labels=profiles.DEGREE_LABELS,
     )
+
+
+@bp.route("/onboarding/voz")
+@login_required
+def onboarding_voice():
+    from agenda.ai.providers import ai_available
+
+    return render_template(
+        "onboarding_voice.html",
+        ia_disponivel=ai_available(),
+        exemplos=profiles.profile_for(None).capture_examples,
+    )
+
+
+@bp.post("/onboarding/voz/confirmar")
+@login_required
+def onboarding_voice_confirm():
+    """Aplica o que o usuário revisou na tela — nunca o que a IA supôs sozinha."""
+    from agenda.ai import onboarding as onboarding_ai
+
+    user = current_user()
+    bruto = request.form.get("payload") or ""
+    try:
+        dados = json.loads(bruto)
+    except json.JSONDecodeError:
+        flash("Não consegui ler a revisão. Tente de novo.", "error")
+        return redirect(url_for("pages.onboarding_voice"))
+    if not isinstance(dados, dict):
+        abort(400)
+
+    # Só entram as matérias que o usuário deixou marcadas.
+    marcadas = set(request.form.getlist("keep"))
+    dados["subjects"] = [
+        materia
+        for indice, materia in enumerate(dados.get("subjects", []) or [])
+        if str(indice) in marcadas
+    ]
+    if not dados["subjects"]:
+        flash("Escolha ao menos uma matéria.", "error")
+        return redirect(url_for("pages.onboarding_voice"))
+
+    resultado = onboarding_ai.apply(db(), user, dados)
+    flash(
+        f"Pronto: {resultado['subjects']} matéria(s) e {resultado['schedules']} horário(s).",
+        "success",
+    )
+    return redirect(url_for("pages.today"))
 
 
 # --------------------------------------------------------------------------- #
@@ -164,8 +237,19 @@ def today():
     refresh_statuses(db(), user)
     context = _context()
     view = planner.today_view(db(), user, context_id=context.id if context else None)
+    shell = _shell(active="today")
+    periodo = shell.get("periodo")
+    dias_restantes = None
+    if periodo is not None and periodo.ends_on:
+        restante = (periodo.ends_on - planner.today_of(user)).days
+        dias_restantes = restante if restante >= 0 else None
     return render_template(
-        "today.html", view=view, greeting=_greeting(user), **_shell(active="today")
+        "today.html",
+        view=view,
+        greeting=_greeting(user),
+        primeiro_nome=(user.name or "").split(" ")[0],
+        dias_restantes=dias_restantes,
+        **shell,
     )
 
 
@@ -234,10 +318,10 @@ def deadlines():
 @onboarding_required
 def event_detail(event_id: str):
     user = current_user()
-    event = db().get(Event, event_id)
-    if event is None or event.user_id != user.id:
+    event = scope.get(db(), Event, event_id, user.id)
+    if event is None:
         abort(404)
-    document = db().get(Document, event.source_id) if event.source_id else None
+    document = scope.get(db(), Document, event.source_id, user.id) if event.source_id else None
     return render_template(
         "event.html",
         event=event,
@@ -299,8 +383,8 @@ def create_subject():
 @onboarding_required
 def subject_detail(subject_id: str):
     user = current_user()
-    subject = db().get(Subject, subject_id)
-    if subject is None or subject.user_id != user.id:
+    subject = scope.get(db(), Subject, subject_id, user.id)
+    if subject is None:
         abort(404)
     view = planner.subject_view(db(), user, subject)
     teachers = db().scalars(select(Teacher).where(Teacher.user_id == user.id)).all()
@@ -315,8 +399,8 @@ def subject_detail(subject_id: str):
 @onboarding_required
 def update_subject(subject_id: str):
     user = current_user()
-    subject = db().get(Subject, subject_id)
-    if subject is None or subject.user_id != user.id:
+    subject = scope.get(db(), Subject, subject_id, user.id)
+    if subject is None:
         abort(404)
     subject.name = (request.form.get("name") or subject.name).strip()[:200]
     subject.short_name = (request.form.get("short_name") or "").strip()[:60]
@@ -339,8 +423,8 @@ def update_subject(subject_id: str):
 @onboarding_required
 def create_schedule(subject_id: str):
     user = current_user()
-    subject = db().get(Subject, subject_id)
-    if subject is None or subject.user_id != user.id:
+    subject = scope.get(db(), Subject, subject_id, user.id)
+    if subject is None:
         abort(404)
     try:
         weekday = int(request.form["weekday"])
@@ -409,8 +493,8 @@ def upload_documents():
 @onboarding_required
 def document_review(document_id: str):
     user = current_user()
-    document = db().get(Document, document_id)
-    if document is None or document.user_id != user.id:
+    document = scope.get(db(), Document, document_id, user.id)
+    if document is None:
         abort(404)
     items = sorted(document.extractions, key=lambda i: (i.needs_review is False, i.kind))
     return render_template(
@@ -426,8 +510,8 @@ def document_review(document_id: str):
 @onboarding_required
 def import_document(document_id: str):
     user = current_user()
-    document = db().get(Document, document_id)
-    if document is None or document.user_id != user.id:
+    document = scope.get(db(), Document, document_id, user.id)
+    if document is None:
         abort(404)
     selected = request.form.getlist("selected")
     for item in document.extractions:
@@ -453,8 +537,8 @@ def import_document(document_id: str):
 @onboarding_required
 def delete_document(document_id: str):
     user = current_user()
-    document = db().get(Document, document_id)
-    if document is None or document.user_id != user.id:
+    document = scope.get(db(), Document, document_id, user.id)
+    if document is None:
         abort(404)
     db().delete(document)
     flash("Documento removido.", "success")
@@ -510,14 +594,18 @@ def search():
 @login_required
 def profile():
     user = current_user()
-    from agenda.models import UserPhone
-
-    links = db().scalars(select(UserPhone).where(UserPhone.user_id == user.id)).all()
+    links = db().scalars(scope.query(UserPhone, user.id)).all()
+    calendario = db().scalars(
+        scope.query(LinkToken, user.id).where(LinkToken.purpose == "calendar")
+    ).first()
+    base = config.PUBLIC_URL or request.url_root.rstrip("/")
     return render_template(
         "profile.html",
         links=[l for l in links if l.active],
         whatsapp_configured=whatsapp.is_configured(),
         whatsapp_number=config.WHATSAPP_NUMBER,
+        plano=billing.active_plan(db(), user),
+        calendar_url=f"{base}/calendario/{calendario.token}.ics" if calendario else "",
         **_shell(active="profile"),
     )
 
@@ -564,8 +652,8 @@ def disconnect():
 @onboarding_required
 def share_subject(subject_id: str):
     user = current_user()
-    subject = db().get(Subject, subject_id)
-    if subject is None or subject.user_id != user.id:
+    subject = scope.get(db(), Subject, subject_id, user.id)
+    if subject is None:
         abort(404)
     view = planner.subject_view(db(), user, subject)
     snapshot = {
@@ -591,6 +679,7 @@ def share_subject(subject_id: str):
 
 
 @bp.route("/join/<code>")
+@limited("share")
 def share_view(code: str):
     collection = db().scalars(
         select(SharedCollection).where(SharedCollection.code == code.upper())
@@ -668,15 +757,387 @@ def share_accept(code: str):
 
 
 # --------------------------------------------------------------------------- #
+# Conta: segurança, dispositivos e privacidade (SPEC §78, §80)
+# --------------------------------------------------------------------------- #
+@bp.route("/conta/seguranca")
+@login_required
+def security_page():
+    user = current_user()
+    ativos = sessions.list_active(db(), user)
+    atual = flask_session.get("sid")
+    from agenda.security import hash_token
+
+    atual_hash = hash_token(atual) if atual else ""
+    return render_template(
+        "security.html",
+        devices=[
+            {
+                "id": row.id,
+                "label": sessions.describe(row),
+                "created_at": row.created_at,
+                "last_seen_at": row.last_seen_at,
+                "is_current": row.token_hash == atual_hash,
+            }
+            for row in ativos
+        ],
+        **_shell(active="profile"),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Planos (SPEC §96)
+# --------------------------------------------------------------------------- #
+@bp.route("/planos")
+@login_required
+def plans_page():
+    user = current_user()
+    return render_template(
+        "plans.html",
+        planos=[billing.PLANS[key] for key in ("FREE", "STUDENT", "FAMILY")],
+        resumo=billing.summary(db(), user),
+        **_shell(active="profile"),
+    )
+
+
+@bp.post("/planos/testar")
+@login_required
+def start_trial():
+    billing.start_trial(db(), current_user())
+    flash(f"Teste de {billing.TRIAL_DAYS} dias liberado. Aproveite.", "success")
+    return redirect(url_for("pages.plans_page"))
+
+
+@bp.post("/planos/assinar")
+@login_required
+def subscribe_plan():
+    """Troca de plano. A cobrança real depende do gateway configurado."""
+    plano = request.form.get("plan", "")
+    if plano not in billing.PLANS:
+        flash("Plano inválido.", "error")
+        return redirect(url_for("pages.plans_page"))
+    if not config.flag("billing_enabled") and plano != "FREE":
+        flash(
+            "A cobrança ainda não está ligada neste ambiente. "
+            "Configure o gateway para aceitar pagamentos.",
+            "error",
+        )
+        return redirect(url_for("pages.plans_page"))
+    billing.change_plan(db(), current_user(), plano)
+    flash("Plano atualizado.", "success")
+    return redirect(url_for("pages.plans_page"))
+
+
+@bp.post("/planos/cancelar")
+@login_required
+def cancel_plan():
+    billing.cancel(db(), current_user())
+    flash("Assinatura cancelada. Você continua com acesso até o fim do período.", "success")
+    return redirect(url_for("pages.plans_page"))
+
+
+# --------------------------------------------------------------------------- #
+# Família (SPEC §59)
+# --------------------------------------------------------------------------- #
+@bp.route("/familia")
+@login_required
+def family_page():
+    user = current_user()
+    estudantes = []
+    for link in family.students_of(db(), user):
+        estudante = db().get(User, link.student_id)
+        if estudante is None:
+            continue
+        estudantes.append({"link": link, "user": estudante})
+    return render_template(
+        "family.html",
+        estudantes=estudantes,
+        responsaveis=[
+            {"link": link, "user": db().get(User, link.guardian_id) if link.guardian_id else None}
+            for link in family.guardians_of(db(), user)
+        ],
+        pode_usar=billing.allows(db(), user, billing.CAN_USE_FAMILY),
+        **_shell(active="profile"),
+    )
+
+
+@bp.post("/familia/convidar")
+@login_required
+def family_invite():
+    user = current_user()
+    link = family.invite(
+        db(), user,
+        email=request.form.get("email", ""),
+        relationship_label=request.form.get("relationship", "responsável"),
+    )
+    flash(f"Convite criado. Código: {link.invite_code}", "success")
+    return redirect(url_for("pages.family_page"))
+
+
+@bp.post("/familia/aceitar")
+@limited("share")
+@login_required
+def family_accept():
+    codigo = (request.form.get("code") or "").strip()
+    link = family.accept(db(), current_user(), codigo)
+    if link is None:
+        flash("Convite inválido, expirado ou sem vaga no plano.", "error")
+    else:
+        flash("Pronto. Agora você acompanha a agenda desse estudante.", "success")
+    return redirect(url_for("pages.family_page"))
+
+
+@bp.post("/familia/<link_id>/permissoes")
+@login_required
+def family_permissions(link_id: str):
+    user = current_user()
+    link = scope.get(db(), GuardianLink, link_id, user.id)
+    if link is None or link.student_id != user.id:
+        abort(404)
+    link.can_view_agenda = bool(request.form.get("can_view_agenda"))
+    link.can_add_events = bool(request.form.get("can_add_events"))
+    link.can_receive_reminders = bool(request.form.get("can_receive_reminders"))
+    flash("Permissões atualizadas.", "success")
+    return redirect(url_for("pages.family_page"))
+
+
+@bp.post("/familia/<link_id>/encerrar")
+@login_required
+def family_revoke(link_id: str):
+    if family.revoke(db(), current_user(), link_id):
+        flash("Vínculo encerrado.", "success")
+    else:
+        flash("Vínculo não encontrado.", "error")
+    return redirect(url_for("pages.family_page"))
+
+
+@bp.route("/familia/<student_id>/agenda")
+@login_required
+def family_student_agenda(student_id: str):
+    """Responsável vê a agenda do estudante — só se houver vínculo ativo."""
+    user = current_user()
+    if not family.can_view(db(), user, student_id):
+        abort(404)
+    estudante = db().get(User, student_id)
+    if estudante is None or estudante.deleted_at is not None:
+        abort(404)
+    grupos = planner.agenda_view(db(), estudante, days=45)
+    return render_template(
+        "family_agenda.html",
+        estudante=estudante,
+        grupos=grupos,
+        pode_adicionar=family.can_add(db(), user, student_id),
+        **_shell(active="profile"),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Notas (SPEC §137)
+# --------------------------------------------------------------------------- #
+@bp.route("/materias/<subject_id>/notas")
+@onboarding_required
+def subject_grades(subject_id: str):
+    user = current_user()
+    subject = scope.get(db(), Subject, subject_id, user.id)
+    if subject is None:
+        abort(404)
+    return render_template(
+        "grades.html",
+        subject=subject,
+        resumo=grades.subject_summary(db(), user, subject),
+        **_shell(active="subjects"),
+    )
+
+
+@bp.post("/materias/<subject_id>/notas")
+@onboarding_required
+def save_subject_grades(subject_id: str):
+    user = current_user()
+    subject = scope.get(db(), Subject, subject_id, user.id)
+    if subject is None:
+        abort(404)
+
+    escala = request.form.get("grade_scale")
+    if escala:
+        try:
+            subject.grade_scale = max(1.0, float(escala.replace(",", ".")))
+        except ValueError:
+            pass
+    aprovacao = request.form.get("passing_grade")
+    if aprovacao:
+        try:
+            subject.passing_grade = float(aprovacao.replace(",", "."))
+        except ValueError:
+            subject.passing_grade = None
+    else:
+        subject.passing_grade = None
+
+    for evento in grades.graded_events(db(), user, subject.id):
+        nota = request.form.get(f"grade_{evento.id}")
+        peso = request.form.get(f"weight_{evento.id}")
+        try:
+            valor = float(nota.replace(",", ".")) if nota else None
+        except ValueError:
+            valor = None
+        try:
+            peso_valor = float(peso.replace(",", ".")) if peso else None
+        except ValueError:
+            peso_valor = None
+        grades.set_grade(db(), user, evento, grade_value=valor, weight=peso_valor)
+
+    flash("Notas salvas.", "success")
+    return redirect(url_for("pages.subject_grades", subject_id=subject.id))
+
+
+# --------------------------------------------------------------------------- #
+# Plano de estudos (SPEC §93, §94)
+# --------------------------------------------------------------------------- #
+@bp.route("/plano-de-estudo")
+@onboarding_required
+def study_plan():
+    user = current_user()
+    hoje = planner.today_of(user)
+    return render_template(
+        "study.html",
+        blocos=planner.study_blocks_view(db(), user, days=21),
+        propostas=study.propose(db(), user, today=hoje),
+        liberado=billing.allows(db(), user, billing.CAN_USE_STUDY_PLANNER),
+        **_shell(active="agenda"),
+    )
+
+
+@bp.post("/plano-de-estudo/gerar")
+@onboarding_required
+def study_generate():
+    user = current_user()
+    if not billing.allows(db(), user, billing.CAN_USE_STUDY_PLANNER):
+        flash("O planejador de estudos faz parte dos planos pagos.", "error")
+        return redirect(url_for("pages.plans_page"))
+    try:
+        minutos = max(30, min(int(request.form.get("minutes_per_day", 90)), 360))
+    except ValueError:
+        minutos = 90
+    dias = tuple(
+        int(d) for d in request.form.getlist("weekdays") if d.isdigit() and 0 <= int(d) <= 6
+    ) or (0, 1, 2, 3, 4, 5, 6)
+    propostas = study.propose(
+        db(), user, today=planner.today_of(user), minutes_per_day=minutos, weekdays=dias
+    )
+    criados = study.save(db(), user, propostas)
+    flash(f"{criados} bloco(s) de estudo no seu plano.", "success")
+    return redirect(url_for("pages.study_plan"))
+
+
+@bp.post("/plano-de-estudo/limpar")
+@onboarding_required
+def study_clear():
+    removidos = study.clear(db(), current_user())
+    flash(f"{removidos} bloco(s) removido(s).", "success")
+    return redirect(url_for("pages.study_plan"))
+
+
+# --------------------------------------------------------------------------- #
+# Períodos letivos (SPEC §132)
+# --------------------------------------------------------------------------- #
+@bp.route("/periodos")
+@onboarding_required
+def periods_page():
+    user = current_user()
+    context = _context()
+    return render_template(
+        "periods.html",
+        lista=periods.list_periods(db(), user.id, context_id=context.id if context else None),
+        kind_label=periods.kind_label,
+        **_shell(active="profile"),
+    )
+
+
+@bp.post("/periodos/virar")
+@onboarding_required
+def next_period():
+    context = _context()
+    if context is None:
+        abort(400)
+    copiar = bool(request.form.get("copy_subjects"))
+    novo = periods.start_next_period(db(), context, copy_subjects=copiar)
+    flash(f"{novo.label} começou. O período anterior ficou arquivado.", "success")
+    return redirect(url_for("pages.periods_page"))
+
+
+# --------------------------------------------------------------------------- #
+# Exportação de calendário (SPEC §95)
+# --------------------------------------------------------------------------- #
+@bp.post("/calendario/assinar")
+@login_required
+def calendar_subscribe():
+    """Gera (ou renova) o link secreto do calendário .ics."""
+    user = current_user()
+    for antigo in db().scalars(
+        scope.query(LinkToken, user.id).where(LinkToken.purpose == "calendar")
+    ).all():
+        db().delete(antigo)
+    token = LinkToken(
+        user_id=user.id,
+        token=secrets.token_urlsafe(24)[:32],
+        purpose="calendar",
+        expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=730),
+    )
+    db().add(token)
+    db().flush()
+    flash("Link do calendário gerado.", "success")
+    return redirect(url_for("pages.profile"))
+
+
+@bp.post("/calendario/revogar")
+@login_required
+def calendar_revoke():
+    user = current_user()
+    for antigo in db().scalars(
+        scope.query(LinkToken, user.id).where(LinkToken.purpose == "calendar")
+    ).all():
+        db().delete(antigo)
+    flash("Link do calendário revogado.", "success")
+    return redirect(url_for("pages.profile"))
+
+
+@bp.route("/calendario/<token>.ics")
+@limited("export")
+def calendar_feed(token: str):
+    """Feed .ics para Google/Apple/Outlook. Autenticado só pelo token secreto."""
+    linha = db().scalars(
+        select(LinkToken).where(LinkToken.token == token, LinkToken.purpose == "calendar")
+    ).first()
+    if linha is None:
+        abort(404)
+    expira = linha.expires_at
+    if expira is not None and expira.tzinfo is None:
+        expira = expira.replace(tzinfo=dt.timezone.utc)
+    if expira is not None and expira < dt.datetime.now(dt.timezone.utc):
+        abort(404)
+    dono = db().get(User, linha.user_id)
+    if dono is None or dono.deleted_at is not None:
+        abort(404)
+
+    corpo = calendar_export.build_calendar(db(), dono, app_name=config.APP_NAME)
+    resposta = make_response(corpo)
+    resposta.headers["Content-Type"] = "text/calendar; charset=utf-8"
+    resposta.headers["Content-Disposition"] = 'inline; filename="grifo.ics"'
+    resposta.headers["Cache-Control"] = "private, max-age=900"
+    return resposta
+
+
+# --------------------------------------------------------------------------- #
 # Admin (SPEC §97) — separado da experiência do aluno
 # --------------------------------------------------------------------------- #
 @bp.route("/admin")
 @login_required
 @admin_required
 def admin():
+    # O painel interno vê agregados e falhas — nunca o conteúdo dos alunos.
     users = db().scalars(select(User).where(User.deleted_at.is_(None))).all()
-    documents = db().scalars(select(Document)).all()
-    usage = db().scalars(select(AiUsage)).all()
+    documents = db().scalars(
+        select(Document).order_by(Document.created_at.desc()).limit(200)
+    ).all()
+    usage = db().scalars(select(AiUsage).order_by(AiUsage.created_at.desc()).limit(2000)).all()
     total_cost = round(sum(u.estimated_cost for u in usage), 4)
     return render_template(
         "admin.html",
@@ -699,19 +1160,32 @@ def manifest():
         {
             "name": config.APP_NAME,
             "short_name": config.APP_NAME,
-            "description": "Seu planner acadêmico que se organiza sozinho.",
+            "description": "Manda o cronograma, a foto do quadro ou um áudio. O Grifo organiza.",
             "start_url": "/hoje",
             "scope": "/",
             "display": "standalone",
-            "background_color": "#0b0d12",
-            "theme_color": "#0b0d12",
+            "background_color": "#faf6ef",
+            "theme_color": "#faf6ef",
             "lang": "pt-BR",
+            "categories": ["education", "productivity"],
             "icons": [
-                {"src": url_for("static", filename="icon.svg"), "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+                {
+                    "src": url_for("static", filename="icon.svg"),
+                    "sizes": "any",
+                    "type": "image/svg+xml",
+                    "purpose": "any",
+                },
+                {
+                    "src": url_for("static", filename="icon-maskable.svg"),
+                    "sizes": "any",
+                    "type": "image/svg+xml",
+                    "purpose": "maskable",
+                },
             ],
             "shortcuts": [
                 {"name": "Hoje", "url": "/hoje"},
-                {"name": "Capturar", "url": "/assistente"},
+                {"name": "Grifar", "url": "/assistente"},
+                {"name": "Entregas", "url": "/entregas"},
             ],
         }
     )

@@ -1,27 +1,31 @@
 {% extends 'base.html' %}
-{% block title %}Assistente · {{ APP_NAME }}{% endblock %}
-{% block heading %}Assistente{% endblock %}
+{% from 'partials/icons.html' import icon %}
+{% block title %}Conversar · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><strong style="font-size:.95rem">Conversar</strong></div></header>
+{% endblock %}
 {% block content %}
-<div data-capture-result class="stack" style="margin:10px 0 90px">
+<div data-capture-result class="stack" style="margin:var(--s4) 0 148px">
   {% if history %}
     {% for message in history %}
       <p class="bubble {{ 'user' if message.role == 'user' else 'bot' }}">{{ message.text }}</p>
     {% endfor %}
   {% else %}
-    <p class="bubble bot">Oi! Me conta o que apareceu: “prova de história sexta”, “levar cartolina amanhã”, ou pergunta “o que tenho essa semana?”.</p>
+    <p class="bubble bot">Me conta o que apareceu: “prova de história sexta”, “levar cartolina amanhã”. Ou pergunta: “o que eu tenho essa semana?”.</p>
   {% endif %}
 </div>
 
-<form data-capture-form autocomplete="off"
-      style="position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));padding:10px 18px;background:var(--surface);border-top:1px solid var(--border);z-index:20">
-  <div class="composer wrap" style="padding:0">
-    <textarea name="text" rows="1" placeholder="Escreva ou segure o microfone" aria-label="Mensagem"></textarea>
-    <button type="button" class="mic" onclick="toggleRecording(this)" aria-label="Gravar áudio">🎙</button>
-    <button type="submit" class="btn" aria-label="Enviar">→</button>
+<form data-capture-form autocomplete="off" class="composer-fixo">
+  <div class="wrap" style="padding:0">
+    <div class="composer">
+      <textarea name="text" rows="1" placeholder="Escreva ou segure o microfone" aria-label="Mensagem"></textarea>
+      <button type="button" class="mic" onclick="toggleRecording(this)" aria-label="Gravar áudio">{{ icon('microfone') }}</button>
+      <button type="submit" class="btn send" aria-label="Enviar">{{ icon('seta') }}</button>
+    </div>
+    <p class="help" data-capture-status role="status" style="margin-top:var(--s2)"></p>
   </div>
-  <p class="help wrap" data-capture-status style="padding:0"></p>
 </form>
 {% endblock %}
 {% block scripts %}
-<script>window.scrollTo(0, document.body.scrollHeight);</script>
+<script nonce="{{ nonce }}">window.scrollTo(0, document.body.scrollHeight);</script>
 {% endblock %}

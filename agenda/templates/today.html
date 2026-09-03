@@ -1,96 +1,139 @@
 {% extends 'base.html' %}
-{% from 'partials/item.html' import event_item %}
-{% from 'partials/icons.html' import icon %}
+{% from 'partials/item.html' import event_item, upcoming_item %}
+{% from 'partials/icons.html' import icon, mark, art %}
 {% block title %}Hoje · {{ APP_NAME }}{% endblock %}
-{% block heading %}{{ APP_NAME }}{% endblock %}
-{% block topbar_actions %}
-  <a href="{{ url_for('pages.search') }}" aria-label="Buscar" style="display:grid;place-items:center;width:38px;height:38px">{{ icon('search') }}</a>
-  <a href="{{ url_for('pages.notifications_page') }}" aria-label="Notificações" style="position:relative;display:grid;place-items:center;width:38px;height:38px">
-    {{ icon('bell') }}
-    {% if unread %}<i style="position:absolute;top:6px;right:7px;width:8px;height:8px;border-radius:50%;background:var(--danger)"></i>{% endif %}
-  </a>
+
+{% block topbar %}
+<header class="topbar">
+  <div class="wrap">
+    <span class="wordmark">{{ mark() }}{{ APP_NAME }}</span>
+    <span class="spacer"></span>
+    <a class="icon-btn" href="{{ url_for('pages.search') }}" aria-label="Buscar">{{ icon('busca') }}</a>
+    <a class="icon-btn" href="{{ url_for('pages.notifications_page') }}"
+       aria-label="Avisos{{ ' — %d não lidos' % unread if unread }}">
+      {{ icon('sino') }}{% if unread %}<span class="dot"></span>{% endif %}
+    </a>
+  </div>
+</header>
 {% endblock %}
 
 {% block content %}
-<div class="greeting">
-  <h2>{{ greeting }}{{ (', ' ~ current_user.name.split(' ')[0]) if current_user.name }}</h2>
-  <p>{{ view.date_label }}</p>
+<div class="pagehead">
+  <p class="label kicker">{{ view.date_label }}</p>
+  <h2 class="h-page">{{ greeting }}{% if primeiro_nome %}, <span class="grifo-sob">{{ primeiro_nome }}</span>{% endif %}</h2>
+  {% if periodo %}<p class="sub">{{ periodo.label }}{% if context and context.title %} · {{ context.title }}{% endif %}</p>{% endif %}
 </div>
 
 {% if view.overdue %}
 <section class="section">
-  <header><h3>Atrasado</h3><a href="{{ url_for('pages.deadlines') }}">ver entregas</a></header>
-  {% for card in view.overdue[:3] %}{{ event_item(card) }}{% endfor %}
+  <header><h3>Ficou para trás</h3><a href="{{ url_for('pages.deadlines') }}">entregas</a></header>
+  {% for card in view.overdue[:3] %}{{ event_item(card, show_date=True) }}{% endfor %}
 </section>
 {% endif %}
 
-<section class="section">
-  <header><h3>Hoje</h3></header>
-  {% if view['items'] %}
-    {% for card in view['items'] %}{{ event_item(card) }}{% endfor %}
-  {% else %}
-    <div class="card empty">
-      <div class="art">🌤️</div>
-      <h4>Nada marcado para hoje.</h4>
-      <p>Manda o cronograma ou conta o que você precisa lembrar — eu organizo.</p>
-      <div class="actions">
-        <button class="btn" type="button" data-sheet="capture-sheet">Adicionar algo</button>
-        <a class="btn ghost" href="{{ url_for('pages.documents') }}">Enviar cronograma</a>
-      </div>
-    </div>
-  {% endif %}
-</section>
+{# A ordem e a existência de cada bloco vêm do perfil do nível de ensino. #}
+{% for bloco in view.blocks %}
 
-{% if view.next_class and not view['items'] %}
-<section class="section">
-  <header><h3>Próxima aula</h3></header>
-  <div class="item c-{{ view.next_class.color }}">
-    <div class="rail"></div>
-    <div class="time">{{ view.next_class.start_time }}</div>
-    <div class="body">
-      <div class="title">{{ view.next_class.subject }}</div>
-      <div class="meta"><span>{{ view.next_class.date | date_pt }}</span>{% if view.next_class.location %}<span>· {{ view.next_class.location }}</span>{% endif %}</div>
-    </div>
-  </div>
-</section>
-{% endif %}
+  {% if bloco.key == 'hoje' %}
+    <section class="section">
+      <header><h3>Hoje</h3>{% if view['items'] %}<span class="count num">{{ view['items']|length }}</span>{% endif %}</header>
+      {% if view['items'] %}
+        {% for card in view['items'] %}{{ event_item(card) }}{% endfor %}
+      {% else %}
+        <div class="empty">
+          {{ art('agenda-livre') }}
+          <h4>Hoje está limpo.</h4>
+          <p>Manda o cronograma ou conta o que apareceu — eu grifo e organizo.</p>
+          <div class="actions">
+            <button class="btn marca" type="button" data-sheet="capture-sheet">Grifar alguma coisa</button>
+            <a class="link" href="{{ url_for('pages.documents') }}">Enviar um cronograma</a>
+          </div>
+        </div>
+      {% endif %}
+    </section>
 
-{% if view.upcoming %}
-<section class="section">
-  <header><h3>Próximos</h3><a href="{{ url_for('pages.agenda') }}">ver tudo</a></header>
-  {% for card in view.upcoming %}
-    <div class="item c-{{ card.color }}">
-      <div class="rail"></div>
-      <div class="time empty" style="min-width:64px;font-size:.78rem">{{ card.when }}</div>
-      <div class="body">
-        <a class="title" href="{{ url_for('pages.event_detail', event_id=card.id) }}">{{ card.title }}</a>
-        <div class="meta"><span class="tag">{{ card.type_label }}</span>{% if card.subject %}<span>{{ card.subject }}</span>{% endif %}<span>· {{ card.date_label }}</span></div>
-      </div>
-    </div>
-  {% endfor %}
-</section>
-{% endif %}
-
-<section class="section">
-  <header><h3>Sua semana</h3><a href="{{ url_for('pages.week') }}">abrir</a></header>
-  <div class="card">
-    <p style="margin:0 0 10px;font-size:.95rem">
-      {{ view.week.counts.aulas }} aulas · {{ view.week.counts.entregas }} entregas · {{ view.week.counts.provas }} provas
-      {% if view.week.heaviest_day %}<br><span class="muted tiny">Seu dia mais cheio é {{ view.week.heaviest_day }}.</span>{% endif %}
-    </p>
-    {% if view.week.total %}
-      <div class="progress" aria-label="Progresso da semana"><i style="width:{{ view.week.progress }}%"></i></div>
-      <p class="tiny muted" style="margin:6px 0 0">{{ view.week.done }} de {{ view.week.total }} entregas concluídas</p>
+  {% elif bloco.key == 'proximos' %}
+    {% if view.upcoming %}
+      <section class="section">
+        <header><h3>Vem aí</h3><a href="{{ url_for('pages.agenda') }}">agenda</a></header>
+        {% for card in view.upcoming %}{{ upcoming_item(card) }}{% endfor %}
+      </section>
     {% endif %}
-    {% if view.week.priorities %}
-      <hr class="divider">
-      <h3 style="font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);margin:0 0 8px">Prioridades</h3>
-      <ol style="margin:0;padding-left:18px">
-        {% for card in view.week.priorities %}
-          <li style="margin-bottom:4px;font-size:.9rem">{{ card.title }} <span class="muted">· {{ card.when }}</span></li>
+
+  {% elif bloco.key == 'estudo' %}
+    {% if view.study %}
+      <section class="section">
+        <header><h3>Blocos de estudo</h3><a href="{{ url_for('pages.study_plan') }}">plano</a></header>
+        {% for bloco_estudo in view.study %}
+          <div class="item p-{{ bloco_estudo.color }}">
+            <span class="rail"></span>
+            <span class="time num"><span class="dia">{{ bloco_estudo.date_label }}</span></span>
+            <span class="body">
+              <span class="title">{{ bloco_estudo.topic }}</span>
+              <span class="meta"><span class="kind">Estudo</span><span>{{ bloco_estudo.minutes }} min</span></span>
+            </span>
+            <span></span>
+          </div>
         {% endfor %}
-      </ol>
+      </section>
     {% endif %}
-  </div>
-</section>
+
+  {% elif bloco.key == 'semana' %}
+    <section class="section">
+      <header><h3>Sua semana</h3><a href="{{ url_for('pages.week') }}">abrir</a></header>
+      <div class="resumo" style="margin-bottom:var(--s5)">
+        <div class="metrica"><span class="n num">{{ view.week.counts.aulas }}</span><span class="l">aulas</span></div>
+        <div class="metrica"><span class="n num">{{ view.week.counts.entregas }}</span><span class="l">entregas</span></div>
+        <div class="metrica"><span class="n num">{{ view.week.counts.provas }}</span><span class="l">provas</span></div>
+      </div>
+      {% if view.week.heaviest_day %}
+        <p class="tiny muted" style="margin:0 0 var(--s4)">Seu dia mais cheio é <strong style="color:var(--ink)">{{ view.week.heaviest_day }}</strong>.</p>
+      {% endif %}
+      {% if view.week.total %}
+        <div class="progress" role="img" aria-label="{{ view.week.done }} de {{ view.week.total }} concluídas"><i style="width:{{ view.week.progress }}%"></i></div>
+        <p class="tiny muted" style="margin:var(--s2) 0 0"><span class="num">{{ view.week.done }}</span> de <span class="num">{{ view.week.total }}</span> concluídas</p>
+      {% endif %}
+      {% if view.week.priorities %}
+        <hr class="divider">
+        <p class="label" style="margin:0 0 var(--s3)">Se der para fazer só três coisas</p>
+        <ol style="margin:0;padding-left:1.15em">
+          {% for card in view.week.priorities %}
+            <li style="margin-bottom:var(--s2);font-size:.92rem">
+              <a href="{{ url_for('pages.event_detail', event_id=card.id) }}" style="font-weight:600">{{ card.title }}</a>
+              <span class="muted"> · {{ card.when }}</span>
+            </li>
+          {% endfor %}
+        </ol>
+      {% endif %}
+    </section>
+
+  {% elif bloco.key == 'periodo' %}
+    {% if periodo %}
+      <section class="section">
+        <header><h3>{{ periodo.label }}</h3><a href="{{ url_for('pages.timeline') }}">linha do tempo</a></header>
+        <p class="tiny muted" style="margin:0">
+          {% if periodo.starts_on and periodo.ends_on %}
+            <span class="num">{{ periodo.starts_on.strftime('%d/%m') }}</span> a
+            <span class="num">{{ periodo.ends_on.strftime('%d/%m/%Y') }}</span>
+            {% if dias_restantes is not none %} · faltam <strong style="color:var(--ink)">{{ dias_restantes }} dias</strong>{% endif %}
+          {% endif %}
+        </p>
+      </section>
+    {% endif %}
+
+  {% elif bloco['items'] or bloco.key in ('levar', 'tarefas') %}
+    <section class="section">
+      <header>
+        <h3>{{ bloco.label }}</h3>
+        {% if bloco.total %}<span class="count num">{{ bloco.total }}</span>{% endif %}
+      </header>
+      {% if bloco['items'] %}
+        {% for card in bloco['items'] %}{{ event_item(card, show_date=True) }}{% endfor %}
+      {% else %}
+        <p class="day-livre">{{ bloco.empty }}</p>
+      {% endif %}
+    </section>
+  {% endif %}
+
+{% endfor %}
 {% endblock %}

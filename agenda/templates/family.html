@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon, art %}
+{% block title %}Família · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.profile') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.95rem">Família</strong>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <p class="label kicker">Responsáveis</p>
+  <h2 class="h-page">Acompanhar sem <span class="grifo-sob">vigiar</span></h2>
+  <p class="sub">O estudante convida, define o que o responsável vê e pode encerrar quando quiser.</p>
+</div>
+
+{% if estudantes %}
+<section class="section">
+  <header><h3>Estudantes que eu acompanho</h3></header>
+  {% for item in estudantes %}
+    <div class="item">
+      <span class="rail" style="background:var(--grifo)"></span>
+      <span class="time empty" style="font-size:.72rem">{{ item.link.relationship_label }}</span>
+      <span class="body">
+        <a class="title" href="{{ url_for('pages.family_student_agenda', student_id=item.user.id) }}">{{ item.user.name or 'Estudante' }}</a>
+        <span class="meta">
+          {% if item.link.can_view_agenda %}<span class="tag feito">vê a agenda</span>{% endif %}
+          {% if item.link.can_receive_reminders %}<span class="tag">recebe lembretes</span>{% endif %}
+        </span>
+      </span>
+      <form method="post" action="{{ url_for('pages.family_revoke', link_id=item.link.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn sm ghost" type="submit">Sair</button>
+      </form>
+    </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="section">
+  <header><h3>Convidar um responsável</h3></header>
+  {% if pode_usar %}
+    <form method="post" action="{{ url_for('pages.family_invite') }}" class="card">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="row">
+        <label class="field"><span>E-mail (opcional)</span><input type="email" name="email" placeholder="mae@exemplo.com"></label>
+        <label class="field"><span>Quem é</span><input type="text" name="relationship" placeholder="mãe, pai, avó" value="responsável"></label>
+      </div>
+      <button class="btn block" type="submit">Gerar convite</button>
+      <p class="help">Você recebe um código. Quem tiver o código e uma conta vira responsável — e você decide o que ele vê.</p>
+    </form>
+  {% else %}
+    <div class="card">
+      <p class="tiny muted" style="margin:0 0 var(--s3)">A conta família faz parte do plano Família.</p>
+      <a class="btn marca block" href="{{ url_for('pages.plans_page') }}">Ver planos</a>
+    </div>
+  {% endif %}
+</section>
+
+<section class="section">
+  <header><h3>Tenho um código</h3></header>
+  <form method="post" action="{{ url_for('pages.family_accept') }}" class="card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field"><span>Código do convite</span><input type="text" name="code" placeholder="ABC123" autocomplete="off"></label>
+    <button class="btn ghost block" type="submit">Entrar como responsável</button>
+  </form>
+</section>
+
+{% if responsaveis %}
+<section class="section">
+  <header><h3>Quem acompanha você</h3></header>
+  {% for item in responsaveis %}
+    <div class="card" style="margin-bottom:var(--s3)">
+      <strong>{{ item.user.name if item.user else 'Convite pendente' }}</strong>
+      <span class="tag {{ 'feito' if item.link.status == 'ACTIVE' else '' }}">{{ 'ativo' if item.link.status == 'ACTIVE' else 'aguardando' }}</span>
+      {% if item.link.status == 'PENDING' %}
+        <p class="tiny muted" style="margin:var(--s2) 0 0">Código: <strong class="num">{{ item.link.invite_code }}</strong></p>
+      {% endif %}
+      <form method="post" action="{{ url_for('pages.family_permissions', link_id=item.link.id) }}" style="margin-top:var(--s3)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label style="display:flex;gap:var(--s2);align-items:center;margin-bottom:var(--s2)">
+          <input type="checkbox" name="can_view_agenda" {{ 'checked' if item.link.can_view_agenda }}><span class="tiny">Pode ver minha agenda</span>
+        </label>
+        <label style="display:flex;gap:var(--s2);align-items:center;margin-bottom:var(--s2)">
+          <input type="checkbox" name="can_add_events" {{ 'checked' if item.link.can_add_events }}><span class="tiny">Pode adicionar compromissos</span>
+        </label>
+        <label style="display:flex;gap:var(--s2);align-items:center;margin-bottom:var(--s3)">
+          <input type="checkbox" name="can_receive_reminders" {{ 'checked' if item.link.can_receive_reminders }}><span class="tiny">Recebe meus lembretes</span>
+        </label>
+        <div class="row">
+          <button class="btn sm ghost" type="submit">Salvar</button>
+        </div>
+      </form>
+      <form method="post" action="{{ url_for('pages.family_revoke', link_id=item.link.id) }}" style="margin-top:var(--s2)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link" type="submit" style="color:var(--alerta);border-color:transparent">Encerrar vínculo</button>
+      </form>
+    </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

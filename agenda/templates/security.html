@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon %}
+{% block title %}Segurança · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.profile') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.95rem">Segurança</strong>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <p class="label kicker">Conta</p>
+  <h2 class="h-page">Quem está <span class="grifo-sob">conectado</span></h2>
+  <p class="sub">Se você não reconhece um dispositivo, desconecte agora e troque a senha.</p>
+</div>
+
+<section class="section">
+  <header><h3>Dispositivos</h3><span class="count num">{{ devices|length }}</span></header>
+  {% for device in devices %}
+    <div class="item">
+      <span class="rail" style="background:{{ 'var(--grifo)' if device.is_current else 'var(--rule-strong)' }}"></span>
+      <span class="time empty num" style="font-size:.72rem">{{ device.last_seen_at.strftime('%d/%m') }}</span>
+      <span class="body">
+        <span class="title">{{ device.label }}</span>
+        <span class="meta">
+          {% if device.is_current %}<span class="tag marca">este agora</span>{% endif %}
+          <span>desde {{ device.created_at.strftime('%d/%m/%Y') }}</span>
+        </span>
+      </span>
+      {% if not device.is_current %}
+        <form method="post" action="{{ url_for('auth.revoke_session', session_id=device.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn sm ghost" type="submit">Sair</button>
+        </form>
+      {% else %}<span></span>{% endif %}
+    </div>
+  {% endfor %}
+  {% if devices|length > 1 %}
+    <form method="post" action="{{ url_for('auth.revoke_other_sessions') }}" style="margin-top:var(--s4)">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn ghost block" type="submit">Desconectar todos os outros</button>
+    </form>
+  {% endif %}
+</section>
+
+<section class="section">
+  <header><h3>Senha</h3></header>
+  <form method="post" action="{{ url_for('auth.change_password') }}" class="card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field"><span>Senha atual</span><input type="password" name="current_password" required autocomplete="current-password"></label>
+    <label class="field">
+      <span>Nova senha</span>
+      <input type="password" name="new_password" required minlength="10" autocomplete="new-password">
+      <span class="help">Mínimo de 10 caracteres, com letras e números. Trocar a senha desconecta os outros dispositivos.</span>
+    </label>
+    <button class="btn block" type="submit">Alterar senha</button>
+  </form>
+</section>
+
+<section class="section">
+  <header><h3>Encerrar</h3></header>
+  <form method="post" action="{{ url_for('auth.delete_account') }}" class="card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <p class="tiny muted" style="margin:0 0 var(--s3)">
+      Apagar a conta remove agenda, documentos e histórico. Não dá para desfazer.
+      Antes disso, você pode <a class="link" href="{{ url_for('api.export_data') }}" download>exportar tudo</a>.
+    </p>
+    <label class="field"><span>Digite EXCLUIR para confirmar</span><input type="text" name="confirm" placeholder="EXCLUIR" autocomplete="off"></label>
+    <button class="btn perigo block" type="submit">Excluir minha conta</button>
+  </form>
+</section>
+{% endblock %}

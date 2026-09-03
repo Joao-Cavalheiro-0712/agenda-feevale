@@ -1,61 +1,138 @@
 {% extends 'base.html' %}
+{% from 'partials/icons.html' import icon, mark %}
 {% block title %}Seus estudos · {{ APP_NAME }}{% endblock %}
-{% block heading %}Onde você estuda?{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><span class="wordmark">{{ mark() }}{{ APP_NAME }}</span></div></header>
+{% endblock %}
 {% block content %}
-<p class="muted" style="margin:8px 0 18px">Em menos de um minuto sua agenda começa a se montar sozinha.</p>
+<div class="pagehead" style="padding-top:var(--s6)">
+  <p class="label kicker" id="passo-label">Passo 1 de 2</p>
+  <h2 class="h-page">Onde você <span class="grifo-sob">estuda</span>?</h2>
+  <p class="sub">Isso muda o app inteiro: quem está no 5º ano tem tema de casa e material para levar; quem faz doutorado tem prazo de submissão.</p>
+</div>
 
 <form method="post" id="onboarding">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="type" id="type" value="UNDERGRAD">
 
+  <a class="capture-option" href="{{ url_for('pages.onboarding_voice') }}" style="margin-bottom:var(--s4);border-color:var(--ink)">
+    <span class="ico">{{ icon('microfone') }}</span>
+    <span><strong>Prefere falar?</strong><small>Conte como são seus estudos e eu monto tudo</small></span>
+  </a>
+
   <div class="stack" id="passo-1">
-    {% for value, label in education_options %}
-      <button type="button" class="capture-option" data-type="{{ value }}">
-        <span class="ico">🎓</span><span><strong>{{ label }}</strong></span>
+    {% for key, perfil in education_options %}
+      <button type="button" class="capture-option" data-nivel="{{ key }}"
+              data-periodo="{{ perfil.default_period_kind }}"
+              data-campos="{{ perfil.onboarding_fields|join(',') }}"
+              data-instituicao="{{ perfil.institution_label }}"
+              data-serie="{{ perfil.grade_label }}"
+              data-periodos="{{ perfil.period_options|join(',') }}">
+        <span class="ico"><span class="num" style="font-weight:700;font-size:.76rem;color:var(--ink-4)">{{ '%02d' % loop.index }}</span></span>
+        <span><strong>{{ perfil.label }}</strong><small>{{ perfil.capture_examples[0] }}</small></span>
       </button>
     {% endfor %}
   </div>
 
   <div id="passo-2" hidden>
-    <div class="card">
-      <label class="field"><span data-label="institution">Instituição</span><input type="text" name="institution" placeholder="Ex.: Feevale"></label>
-      <label class="field" data-only="UNDERGRAD,POSTGRAD,TECHNICAL,FREE_COURSE"><span>Curso</span><input type="text" name="course_name" placeholder="Ex.: Direito"></label>
-      <label class="field" data-only="ELEMENTARY,MIDDLE_SCHOOL,HIGH_SCHOOL"><span>Ano / série</span><input type="text" name="grade_name" placeholder="Ex.: 7º ano"></label>
-      <div class="row">
-        <label class="field" data-only="UNDERGRAD,POSTGRAD"><span>Semestre</span><input type="text" name="semester" placeholder="1º semestre"></label>
-        <label class="field" data-only="TECHNICAL"><span>Módulo</span><input type="text" name="module" placeholder="Módulo 2"></label>
-        <label class="field" data-only="ELEMENTARY,MIDDLE_SCHOOL,HIGH_SCHOOL"><span>Turma</span><input type="text" name="class_name" placeholder="Turma B"></label>
-        <label class="field"><span>Turno</span>
-          <select name="shift">
-            <option value="">—</option><option value="manha">Manhã</option>
-            <option value="tarde">Tarde</option><option value="noite">Noite</option>
-            <option value="integral">Integral</option>
-          </select>
-        </label>
-      </div>
-      <div class="row">
-        <label class="field"><span>Início do período</span><input type="date" name="starts_on"></label>
-        <label class="field"><span>Fim do período</span><input type="date" name="ends_on"></label>
-      </div>
-      <button class="btn block" type="submit">Continuar</button>
-      <p class="help">Depois você pode enviar seus cronogramas ou simplesmente contar o que tem — eu cadastro as matérias.</p>
+    <label class="field" data-campo="institution">
+      <span data-label="institution">Instituição</span>
+      <input type="text" name="institution" placeholder="Onde você estuda">
+    </label>
+
+    <label class="field" data-campo="course_name">
+      <span data-label="course">Curso</span>
+      <input type="text" name="course_name" placeholder="Direito">
+    </label>
+
+    <label class="field" data-campo="degree_kind">
+      <span>Modalidade</span>
+      <select name="degree_kind">
+        <option value="">—</option>
+        {% for value, label in degree_labels.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+
+    <label class="field" data-campo="grade_name">
+      <span data-label="serie">Ano</span>
+      <input type="text" name="grade_name" placeholder="7º ano">
+    </label>
+
+    <div class="row">
+      <label class="field" data-campo="semester"><span>Semestre atual</span><input type="text" name="semester" placeholder="1º"></label>
+      <label class="field" data-campo="module"><span>Módulo atual</span><input type="text" name="module" placeholder="2"></label>
+      <label class="field" data-campo="class_name"><span>Turma</span><input type="text" name="class_name" placeholder="B"></label>
+      <label class="field" data-campo="shift"><span>Turno</span>
+        <select name="shift">
+          <option value="">—</option><option value="manha">Manhã</option>
+          <option value="tarde">Tarde</option><option value="noite">Noite</option>
+          <option value="integral">Integral</option>
+        </select>
+      </label>
     </div>
+
+    <label class="field" data-campo="advisor" hidden>
+      <span>Orientador(a)</span><input type="text" name="advisor" placeholder="Nome de quem te orienta">
+    </label>
+
+    <label class="field">
+      <span>Como sua instituição divide o ano</span>
+      <select name="period_kind" id="period_kind">
+        {% for value, labels in period_labels.items() %}
+          <option value="{{ value }}">{{ labels[1] }}</option>
+        {% endfor %}
+      </select>
+      <span class="help" id="period-help">Semestre, trimestre, bimestre, módulo — eu organizo suas matérias e provas dentro do período certo.</span>
+    </label>
+
+    <div class="row">
+      <label class="field"><span>Começou em</span><input type="date" name="starts_on"></label>
+      <label class="field"><span>Termina em</span><input type="date" name="ends_on"></label>
+    </div>
+
+    <button class="btn marca block" type="submit">Continuar</button>
+    <button class="link center" type="button" id="voltar" style="display:block;margin:var(--s4) auto 0">Escolher outro nível</button>
+    <p class="help">Depois é só mandar os cronogramas — ou contar o que você tem. Eu cadastro as matérias.</p>
   </div>
 </form>
 {% endblock %}
 {% block scripts %}
-<script>
-document.querySelectorAll('[data-type]').forEach(button => button.addEventListener('click', () => {
-  const value = button.dataset.type;
-  document.getElementById('type').value = value;
-  document.getElementById('passo-1').hidden = true;
-  document.getElementById('passo-2').hidden = false;
-  document.querySelectorAll('[data-only]').forEach(field => {
-    field.hidden = !field.dataset.only.split(',').includes(value);
+<script nonce="{{ nonce }}">
+const passo1 = document.getElementById('passo-1');
+const passo2 = document.getElementById('passo-2');
+const rotulo = document.getElementById('passo-label');
+
+document.querySelectorAll('[data-nivel]').forEach(botao => botao.addEventListener('click', () => {
+  const campos = (botao.dataset.campos || '').split(',').filter(Boolean);
+  document.getElementById('type').value = botao.dataset.nivel;
+
+  document.querySelectorAll('[data-campo]').forEach(campo => {
+    campo.hidden = !campos.includes(campo.dataset.campo);
   });
-  const schoolish = ['ELEMENTARY','MIDDLE_SCHOOL','HIGH_SCHOOL'].includes(value);
-  document.querySelector('[data-label=institution]').textContent = schoolish ? 'Escola' : 'Instituição';
+
+  document.querySelector('[data-label=institution]').textContent = botao.dataset.instituicao;
+  const serie = document.querySelector('[data-label=serie]');
+  if (serie) serie.textContent = botao.dataset.serie;
+
+  // Deixa só as divisões de ano que fazem sentido para este nível.
+  const permitidos = (botao.dataset.periodos || '').split(',').filter(Boolean);
+  const select = document.getElementById('period_kind');
+  Array.from(select.options).forEach(opcao => {
+    opcao.hidden = permitidos.length > 0 && !permitidos.includes(opcao.value);
+  });
+  select.value = botao.dataset.periodo;
+
+  passo1.hidden = true;
+  passo2.hidden = false;
+  rotulo.textContent = 'Passo 2 de 2';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }));
+
+document.getElementById('voltar').addEventListener('click', () => {
+  passo2.hidden = true;
+  passo1.hidden = false;
+  rotulo.textContent = 'Passo 1 de 2';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 </script>
 {% endblock %}

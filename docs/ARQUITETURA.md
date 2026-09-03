@@ -32,7 +32,7 @@ Entrada (web · WhatsApp · Telegram · documento)
 
 | Pasta | Responsabilidade |
 |---|---|
-| `agenda/core` | Regras determinísticas: datas, recorrência, lembretes, duplicados, ações, planner. **Fonte de verdade.** |
+| `agenda/core` | Regras determinísticas: datas, recorrência, lembretes, períodos letivos, perfis por nível, escopo de acesso, duplicados, ações, planner, planos, família, notas e estudo. **Fonte de verdade.** |
 | `agenda/ai` | Interpretação: provedores plugáveis, prompts versionados, contexto seletivo, heurística de reserva. |
 | `agenda/ingest` | Pipeline documental: extração nativa → visão só onde precisa → candidatos para revisão. |
 | `agenda/channels` | WhatsApp Cloud API e Telegram. |
@@ -84,3 +84,30 @@ ele não tem como executar nada por conta própria.
 * deduplicação por SHA-256 do arquivo;
 * cada operação grava `AiUsage` (modelo, tokens, custo estimado) para o painel
   interno calcular custo por usuário e por documento.
+
+
+## Um núcleo, muitas experiências
+
+`core/profiles.py` é o que faz o mesmo banco atender da educação infantil ao
+doutorado. Cada nível declara vocabulário, tipos de atividade, campos do
+cadastro, blocos da tela inicial, lembretes padrão e recursos ligados. Nenhuma
+tela decide isso sozinha — se uma diferença entre níveis aparecer espalhada
+pelo código, é bug de arquitetura.
+
+`core/periods.py` cuida da outra metade: semestre, trimestre, bimestre,
+quadrimestre, módulo, anual ou contínuo. Os períodos existem como entidade, o
+que permite arquivar o passado sem apagar nada e responder "quando foi a prova
+do semestre passado?".
+
+## Isolamento como camada, não como disciplina
+
+`core/scope.py` centraliza a regra de propriedade de cada modelo. Rotas e
+serviços pedem objetos por lá; quem esquece de declarar um modelo novo recebe
+negação, não vazamento. É o oposto de depender de lembrar do filtro em cada
+consulta.
+
+## Cobrança desacoplada
+
+`core/billing.py` expõe `allows()`, `limit_of()` e `check_quota()`. O resto do
+código nunca pergunta "qual é o plano?", pergunta "posso fazer isto?". Trocar
+preço, limite ou provedor não toca em nenhuma regra de produto.

@@ -6,9 +6,10 @@ import functools
 from flask import g, jsonify, redirect, request, session, url_for
 
 from agenda import config
+from agenda.core import sessions
 from agenda.db import SessionLocal
 from agenda.models import User
-from agenda.security import csrf_ok, new_csrf_token, rate_limit
+from agenda.security import csp_nonce, csrf_ok, new_csrf_token, rate_limit
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -23,6 +24,7 @@ def init_app(app) -> None:
     @app.before_request
     def _prepare():
         session.permanent = True
+        g.nonce = csp_nonce()
         if "csrf" not in session:
             session["csrf"] = new_csrf_token()
         g.user = _load_user()
@@ -53,23 +55,41 @@ def _csrf_exempt() -> bool:
 
 
 def _load_user() -> User | None:
-    user_id = session.get("user_id")
-    if not user_id:
+    """Resolve o usuário pela sessão guardada no banco, nunca pelo id no cookie.
+
+    O cookie carrega só um token opaco: se ele vazar, dá para revogar; e um
+    cookie forjado não vira sessão porque a linha correspondente não existe.
+    """
+    token = session.get("sid")
+    if not token:
         return None
-    user = db().get(User, user_id)
-    if user is None or user.deleted_at is not None:
-        session.pop("user_id", None)
+    user = sessions.resolve(db(), token)
+    if user is None:
+        session.clear()
         return None
     return user
 
 
 def login_user(user: User) -> None:
-    session["user_id"] = user.id
+    """Sessão nova a cada login — impede fixação de sessão."""
+    user_agent = request.headers.get("User-Agent", "")
+    ip = _client_ip()
+    session.clear()
+    session["sid"] = sessions.create(db(), user, user_agent=user_agent, ip=ip)
     session["csrf"] = new_csrf_token()
 
 
 def logout_user() -> None:
+    sessions.revoke(db(), session.get("sid"))
     session.clear()
+
+
+def _client_ip() -> str | None:
+    """IP do cliente considerando um proxy à frente (Railway usa X-Forwarded-For)."""
+    encaminhado = request.headers.get("X-Forwarded-For", "")
+    if encaminhado:
+        return encaminhado.split(",")[0].strip()[:45]
+    return request.remote_addr
 
 
 def current_user() -> User | None:
@@ -110,7 +130,7 @@ def limited(bucket: str):
         @functools.wraps(view)
         def wrapped(*args, **kwargs):
             user = current_user()
-            identity = user.id if user else (request.headers.get("X-Forwarded-For") or request.remote_addr or "anon")
+            identity = user.id if user else (_client_ip() or "anon")
             if not rate_limit(bucket, identity):
                 message = "Muitas tentativas. Tente de novo em instantes."
                 if request.path.startswith("/api/"):

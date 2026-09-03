@@ -12,7 +12,7 @@ escopo (P1/P2/P3 ou dependente de contrato externo).
 | 4 | Públicos (fundamental → pós) | ✅ | `EducationType`, `pages.TYPES_BY_EDUCATION`, rótulos em `core/events.py` |
 | 5 | Hierarquia usuário → contexto → matéria | ✅ | `models.py` |
 | 6 | Onboarding por etapas | ✅ | `templates/onboarding.html` |
-| 7 | Onboarding por voz | ◑ | schema e prompt prontos (`ai/prompts.ONBOARDING_SCHEMA`); a tela de revisão do lote reaproveita a confirmação do assistente |
+| 7 | Onboarding por voz | ✅ | `ai/onboarding.py` + `/onboarding/voz` com tela de revisão item a item |
 | 8–10 | Onboarding por documentos, pipeline, modelo intermediário | ✅ | `ingest/pipeline.py`, `ingest/text_extract.extract_pages` |
 | 11 | Extração estruturada validada por schema | ✅ | `ai/prompts.DOCUMENT_SCHEMA` + validação em `pipeline._normalize_event` |
 | 12 | Proveniência | ✅ | `Event.source_type/source_id/source_reference`, exibida em `templates/event.html` |
@@ -32,12 +32,12 @@ escopo (P1/P2/P3 ou dependente de contrato externo).
 | 42–45 | Matérias, professores, locais, recorrências | ✅ | `core/academic.py`, `core/recurrence.py` |
 | 46–48 | Eventos, tipos, status | ✅ | `models.Event` |
 | 49–50 | Lembretes 7/1 dia e perfis por tipo | ✅ | `core/reminders.py` |
-| 51–52 | Canais e central de notificações | ◑ | in-app + WhatsApp + Telegram prontos; Web Push tem service worker e endpoint de inscrição, falta o envio VAPID |
+| 51–52 | Canais e central de notificações | ✅ | in-app, Web Push (VAPID gerado por `agenda.cli vapid`), WhatsApp, Telegram e cópia para responsáveis |
 | 53–54 | Assistente no app e resumo da semana | ✅ | `templates/assistant.html`, `planner.week_summary` |
-| 55 | Busca universal | ◑ | busca textual em eventos e matérias; linguagem natural cai na heurística |
+| 55 | Busca universal | ◑ | busca textual em eventos e matérias; linguagem natural passa pelo interpretador |
 | 56 | Tela de documentos | ✅ | `templates/documents.html` |
 | 57–58 | Compartilhamento de turma | ✅ | `SharedCollection`, `/join/<code>` |
-| 59 | Conta família | ⏳ | flag `family_enabled` desligada (P2) |
+| 59 | Conta família | ✅ | `core/family.py`, convite revogável, permissões separadas e cópia dos lembretes |
 | 60 | PWA | ✅ | manifest, service worker, offline, instalável |
 
 ## Engenharia
@@ -45,6 +45,7 @@ escopo (P1/P2/P3 ou dependente de contrato externo).
 | § | Item | Estado | Onde |
 |---|---|---|---|
 | 61–63 | Stack e serviços lógicos | ◑ | monólito Python organizado nas mesmas fronteiras (`core`, `ai`, `ingest`, `channels`, `jobs`, `web`) para extração futura |
+| 64–65 | Níveis de ensino e períodos | ✅ | 13 níveis em `EducationType`, 7 divisões de ano em `PeriodKind`, `core/periods.py` e `core/profiles.py` |
 | 64–65 | Entidades e educação flexível | ✅ | `models.py` |
 | 66 | Endpoints | ✅ | `web/api.py`, `web/pages.py`, `web/webhooks.py` |
 | 67–68 | Webhook e mídia | ✅ | assinatura HMAC, idempotência, 200 rápido, processamento fora do request |
@@ -54,31 +55,42 @@ escopo (P1/P2/P3 ou dependente de contrato externo).
 | 75 | Timezone | ✅ | data local + instantes em UTC |
 | 76–77 | Notificações agendadas e status de entrega | ✅ | `EventReminder`, `NotificationDelivery` |
 | 78–79 | Autenticação e segurança | ✅ | scrypt, cookies HttpOnly/SameSite/Secure, CSRF, CSP, rate limit, validação de upload |
-| 80–83 | LGPD, idade, retenção | ◑ | exportação, exclusão, retenção de áudio/documento e minimização implementadas; fluxo de responsável e revisão jurídica ficam para o pré-lançamento |
+| 80–83 | LGPD, idade, retenção | ◑ | exportação, exclusão anonimizada, retenção configurável, minimização (IP e token só em hash), automação desligada em perfil de criança e conta de responsável; a revisão jurídica formal fica para o pré-lançamento |
 | 84 | Auditoria | ✅ | `AuditLog` com antes/depois, modelo e versão de prompt |
 | 85–88 | Observabilidade e métricas | ◑ | `AiUsage`, painel interno e logs estruturados; Sentry/tracing dependem do ambiente |
 | 89–91 | Estados vazios, processamento, erro | ✅ | telas de vazio com ação, progresso por etapas, mensagens de erro acionáveis |
 | 92 | Não inventar | ✅ | âncoras não resolvidas viram pergunta (teste `test_ancora_sem_aula_pergunta_em_vez_de_inventar`) |
-| 93–95 | Sugestões proativas, plano de estudos, calendários externos | ⏳ | flags desligadas (P2) |
-| 96 | Billing | ⏳ | flag `billing_enabled` desligada; entitlements previstos em `config.FEATURE_FLAGS` |
+| 93–95 | Sugestões proativas, plano de estudos, calendários externos | ✅ | `core/study.py` (blocos separados do obrigatório) e `core/calendar_export.py` (.ics para Google/Apple/Outlook); sincronização bidirecional continua fora |
+| 96 | Billing | ◑ | planos, entitlements, quotas mensais e paywall em `core/billing.py`; a chamada ao gateway depende de chave |
 | 97 | Admin | ✅ | `/admin`, invisível para aluno (404) |
 | 98 | Feature flags | ✅ | `config.FEATURE_FLAGS` |
 | 99–100 | Jobs e estados de processamento | ✅ | `jobs/scheduler.py`, `DocumentStatus` |
 | 101–103 | Testes e golden dataset | ✅ | 125 testes; `tests/golden/dataset.jsonl` versionado |
 | 104 | Ações destrutivas | ✅ | exclusão sempre confirma |
-| 105–107 | Performance, cache, backup | ◑ | updates otimistas e skeletons no cliente; cache/backup são configuração de infraestrutura |
-| 108–110 | Ambientes, CI/CD, migrations | ◑ | `APP_ENV`, CI no GitHub Actions; migrations versionadas (Alembic) ficam para o P1 |
+| 105–107 | Performance, cache, backup | ◑ | updates otimistas e skeletons no cliente; tetos de processamento por documento; cache/backup são configuração de infraestrutura |
+| 108–110 | Ambientes, CI/CD, migrations | ✅ | `APP_ENV`, CI no GitHub Actions e Alembic aplicado no start (produção não cria tabela sozinha) |
 | 111 | Rate limits | ✅ | `security.rate_limit` |
 | 112–115 | Custo de IA, hash, privacidade | ✅ | `AiUsage`, SHA-256, provedores plugáveis |
 | 116–119 | Fluxos de MVP | ✅ | cobertos em `tests/test_interpreter.py` e no golden dataset |
 | 120 | Escopo P0 | ✅ | completo |
-| 121 | Escopo P1 | ◑ | WhatsApp, PWA e LGPD prontos; billing e Web Push VAPID pendentes |
-| 122–123 | P2 / P3 | ⏳ | fora deste escopo |
+| 121 | Escopo P1 | ✅ | WhatsApp, PWA, LGPD, Web Push, analytics interno e planos com quotas |
+| 122 | Escopo P2 | ◑ | família, notas e pesos, checklists, planejador de estudo e exportação de calendário entregues; sincronização bidirecional e apps nativos continuam fora |
+| 123 | P3 / B2B | ⏳ | plano institucional existe como entitlement; painel da instituição e SSO ficam para depois |
+| 137 | Notas e pesos | ✅ | `core/grades.py` com média ponderada e quanto falta para passar |
+| 139–140 | Materiais e checklists | ✅ | checklist no evento, com extração automática de "levar cartolina e cola" |
+| 141 | Tempo real | ✅ | SSE em `web/realtime.py`: o que chega pelo WhatsApp aparece na aba aberta |
 
-## O que falta para o beta (SPEC §149)
+## O que ainda depende de terceiros
 
-1. Envio real de Web Push (chaves VAPID) — a inscrição e o service worker já existem.
-2. Migrations versionadas (Alembic) antes do primeiro deploy com dados reais.
-3. Números e templates aprovados na Meta para mensagens proativas por WhatsApp.
-4. Revisão jurídica de LGPD e do fluxo para menores de idade.
-5. Fila externa (Redis/BullMQ ou Celery) no lugar das threads, quando o volume exigir.
+Tudo que falta agora depende de credencial ou de decisão externa — não de código:
+
+1. **Chaves de IA** (`GEMINI_API_KEY`): sem elas o produto funciona com o
+   interpretador heurístico, mas áudio, visão e extração inteligente ficam
+   desligados.
+2. **WhatsApp Business**: número aprovado, token e templates de mensagem
+   proativa aprovados pela Meta.
+3. **Gateway de pagamento**: a estrutura de planos e quotas está pronta; falta
+   plugar o provedor e ligar `FEATURE_BILLING`.
+4. **Revisão jurídica** de LGPD e do fluxo para menores antes do go-live.
+5. **Fila externa** (Redis/Celery) no lugar das threads, quando o volume pedir —
+   a fronteira já está desenhada em `jobs/`.
