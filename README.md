@@ -72,6 +72,25 @@ humana (SPEC §103).
 
 ---
 
+## No ar
+
+O projeto **grifo** no Railway hospeda a aplicação:
+
+* app: `https://grifo-web-production.up.railway.app`
+* banco: PostgreSQL no mesmo projeto, com volume persistente
+* schema aplicado por migration no start; healthcheck em `/healthz`
+
+O que ainda está desligado por falta de credencial (e como ligar):
+
+| Recurso | Variável | Efeito enquanto desligado |
+|---|---|---|
+| IA (áudio, visão, extração) | `GEMINI_API_KEY` | o interpretador heurístico assume; texto continua funcionando |
+| WhatsApp | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `FEATURE_WHATSAPP=true` | o canal fica oculto na interface |
+| Cobrança | gateway + `FEATURE_BILLING=true` | os planos aparecem, mas a troca paga é recusada |
+
+`SECRET_KEY`, `DATABASE_URL` e as chaves VAPID já estão configuradas no ambiente
+de produção.
+
 ## Deploy no Railway
 
 1. Crie o projeto a partir deste repositório.
