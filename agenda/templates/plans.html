@@ -74,9 +74,21 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="plan" value="{{ plano.tier }}">
         <input type="hidden" name="cycle" value="{{ ciclo }}">
-        <button class="btn {{ 'marca' if plano.price_month else 'ghost' }} block" type="submit">
+        <button class="btn {{ 'marca' if plano.price_month else 'ghost' }} block"
+                type="submit" name="method" value="card">
           {% if plano.price_month %}Assinar {{ plano.name }}{% if ciclo == 'ANNUAL' %} por ano{% endif %}{% else %}Voltar para o grátis{% endif %}
         </button>
+        {% if plano.price_month %}
+          <p class="help center" style="margin:var(--s2) 0">Cartão, Apple&nbsp;Pay ou Google&nbsp;Pay</p>
+          <button class="btn ghost block" type="submit" name="method" value="pix">
+            Pagar {% if ciclo == 'ANNUAL' %}o ano{% else %}o mês{% endif %} com Pix
+          </button>
+          <p class="help center" style="margin-top:var(--s2)">
+            Pix não renova sozinho: você paga
+            {% if ciclo == 'ANNUAL' %}1 ano{% else %}1 mês{% endif %} e a gente avisa
+            antes de acabar.
+          </p>
+        {% endif %}
       </form>
     {% endif %}
   </div>

@@ -855,6 +855,14 @@ class Subscription(Base):
     provider: Mapped[str] = mapped_column(String(30), default="none")
     external_id: Mapped[str] = mapped_column(String(120), default="")
     seats: Mapped[int] = mapped_column(Integer, default=1)
+    # Pix não faz cobrança recorrente: é um pagamento avulso que compra um
+    # período. Sem esta marca, uma assinatura paga por Pix ficaria ATIVA para
+    # sempre depois que o período acabasse — dinheiro saindo pela porta.
+    renews: Mapped[bool] = mapped_column(Boolean, default=True)
+    payment_method: Mapped[str] = mapped_column(String(20), default="card")
+    # Quando o aviso de "seu período está acabando" saiu. Sem isto, o worker
+    # repetiria o aviso a cada rodada até virar ruído que ninguém lê.
+    renewal_notice_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     trial_ends_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     current_period_end: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))

@@ -338,3 +338,37 @@ verificador de quem tem conta aqui.
 |---|---|
 | `WEBAUTHN_RP_ID` | Domínio registrável, sem esquema e sem porta. Vazio = deriva de `PUBLIC_URL` |
 | `WEBAUTHN_ORIGIN` | Origens aceitas, separadas por vírgula. Vazio = `PUBLIC_URL` |
+
+## Pix, Apple Pay e Google Pay
+
+**As carteiras não são um terceiro meio de pagamento.** Apple Pay e Google Pay
+são um cartão apresentado sem digitar número: bastam `card` habilitado e o
+domínio registrado no gateway, e o botão aparece sozinho no aparelho que
+suporta. Tratá-las como método separado geraria um checkout duplicado que o
+gateway recusa. `payment_method_types[0]=card` vai declarado no pedido para que
+uma mudança no painel não desligue a carteira sem ninguém perceber.
+
+**Pix não faz cobrança recorrente.** Isso não é limitação do nosso código: o
+arranjo do Pix é de pagamento avulso, e cobrança automática exigiria Pix
+Automático, que o gateway ainda não expõe. Então o checkout por Pix usa
+`mode: payment` — a pessoa paga uma vez e compra um período (1 mês ou 1 ano).
+
+Isso abriria um vazamento de receita silencioso, e ele está fechado em três
+pontos:
+
+1. `Subscription.renews = False` marca o pagamento avulso no banco.
+2. `active_plan()` devolve o plano grátis quando uma assinatura que não renova
+   passa de `current_period_end`. Sem essa linha, um mês pago por Pix viraria
+   plano pago vitalício — e há teste afirmando que o período acaba mesmo.
+3. Um worker diário avisa 3 dias antes do vencimento (uma vez só, marcado em
+   `renewal_notice_at`). Sem cobrança recorrente, o silêncio é uma armadilha: a
+   pessoa descobriria que perdeu o plano na véspera da prova.
+
+O desconto de indicação entra no valor do Pix, e não como cupom de primeira
+parcela: sendo pagamento único, não existe recorrência da qual distinguir a
+primeira cobrança.
+
+**Configuração no painel do gateway** (fora do código): habilitar o método
+`pix` para a conta, e registrar o domínio em Payment Method Domains para a
+Apple Pay funcionar — sem esse registro o botão simplesmente não aparece no
+Safari, sem erro visível.

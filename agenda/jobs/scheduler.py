@@ -97,6 +97,24 @@ def referral_tick() -> None:
             print(f"[jobs] falha ao qualificar indicações: {erro}")
 
 
+def vencimento_tick() -> None:
+    """Avisa quem pagou por Pix que o período está acabando.
+
+    Sem cobrança recorrente, o silêncio é uma armadilha: a pessoa descobre que
+    perdeu o plano na véspera da prova.
+    """
+    from agenda.core import billing
+
+    with session_scope() as db:
+        try:
+            total = billing.avisar_vencimentos(db)
+            if total:
+                print(f"[jobs] {total} aviso(s) de vencimento enviados.")
+        except Exception as erro:  # noqa: BLE001 - worker nunca derruba o processo
+            db.rollback()
+            print(f"[jobs] falha ao avisar vencimentos: {erro}")
+
+
 def backup_tick() -> None:
     """Dump do banco, de madrugada.
 
@@ -139,6 +157,10 @@ def start() -> None:  # pragma: no cover - infra
     )
     _scheduler.add_job(
         backup_tick, "cron", hour=2, minute=30, id="backup.dump", replace_existing=True
+    )
+    _scheduler.add_job(
+        vencimento_tick, "cron", hour=9, minute=0, id="billing.expiring",
+        replace_existing=True,
     )
     _scheduler.start()
     print(f"[jobs] scheduler ativo (tick {config.NOTIFICATION_TICK_SECONDS}s).")

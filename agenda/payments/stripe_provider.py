@@ -21,6 +21,8 @@ import json
 
 from agenda import config
 from agenda.payments.base import (
+    METODO_CARTAO,
+    METODO_PIX,
     EVENT_PAYMENT_DISPUTED,
     EVENT_PAYMENT_REFUNDED,
     EVENT_SUBSCRIPTION_CANCELED,
@@ -60,11 +62,19 @@ class StripeProvider(PaymentProvider):
     def create_checkout(
         self, *, user, plan: str, cycle: str, amount_cents: int,
         success_url: str, cancel_url: str, first_invoice_discount: float = 0.0,
+        method: str = METODO_CARTAO,
     ) -> CheckoutSession:
         if not self.configured:
             return CheckoutSession(ok=False, message="Gateway não configurado.")
 
         import requests
+
+        if method == METODO_PIX:
+            return self._checkout_pix(
+                requests, user=user, plan=plan, cycle=cycle,
+                amount_cents=amount_cents, success_url=success_url,
+                cancel_url=cancel_url, first_invoice_discount=first_invoice_discount,
+            )
 
         # `client_reference_id` é o elo entre a cobrança e a conta. Vai daqui e
         # volta no webhook: assim nenhum campo editável pelo cliente decide de
@@ -86,6 +96,13 @@ class StripeProvider(PaymentProvider):
                 "year" if cycle == "ANNUAL" else "month"
             ),
             "line_items[0][price_data][product_data][name]": f"{config.APP_NAME} {plan}",
+            # Apple Pay e Google Pay não são meios separados: são um cartão
+            # apresentado sem digitar número. Basta `card` habilitado e o
+            # domínio registrado no gateway — o botão aparece sozinho no
+            # aparelho que suporta. Declarar explicitamente evita que uma
+            # mudança de configuração no painel desligue a carteira sem
+            # ninguém perceber.
+            "payment_method_types[0]": "card",
         }
         if first_invoice_discount > 0:
             # Cupom de UMA parcela ("duration": "once"): o preço recorrente
@@ -107,6 +124,66 @@ class StripeProvider(PaymentProvider):
 
         if resposta.status_code >= 400:
             return CheckoutSession(ok=False, message="O gateway recusou a cobrança.")
+        corpo = resposta.json()
+        return CheckoutSession(
+            ok=True, url=corpo.get("url", ""), external_id=corpo.get("id", "")
+        )
+
+    def _checkout_pix(
+        self, requests, *, user, plan: str, cycle: str, amount_cents: int,
+        success_url: str, cancel_url: str, first_invoice_discount: float,
+    ) -> CheckoutSession:
+        """Pix é pagamento AVULSO, não assinatura.
+
+        O arranjo do Pix não faz cobrança recorrente — cobrança automática
+        exigiria Pix Automático, que o gateway ainda não expõe. Então aqui o
+        modo é `payment`: a pessoa paga uma vez e compra um período. A conta
+        volta para o grátis quando ele acaba, com aviso antes (o worker olha
+        `renews=False` e a data de vencimento).
+
+        Fingir que Pix é assinatura seria pior de todas as formas: a cobrança
+        seguinte simplesmente não viria, e a gente descobriria pelo suporte.
+        """
+        # O desconto de indicação entra no valor porque, sendo pagamento único,
+        # não existe "primeira parcela" a distinguir da recorrência.
+        centavos = int(round(amount_cents * (1 - first_invoice_discount)))
+        meses = 12 if cycle == "ANNUAL" else 1
+        rotulo = "1 ano" if meses == 12 else "1 mês"
+
+        dados = {
+            "mode": "payment",
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+            "client_reference_id": user.id,
+            "customer_email": user.email or "",
+            "locale": "pt-BR",
+            "payment_method_types[0]": "pix",
+            "metadata[plan]": plan,
+            "metadata[cycle]": cycle,
+            "metadata[user_id]": user.id,
+            "metadata[method]": "pix",
+            "metadata[avulso]": "1",
+            "line_items[0][quantity]": "1",
+            "line_items[0][price_data][currency]": "brl",
+            "line_items[0][price_data][unit_amount]": str(centavos),
+            "line_items[0][price_data][product_data][name]": (
+                f"{config.APP_NAME} {plan} — {rotulo}"
+            ),
+            # O QR do Pix expira; 24 horas é o que o gateway aceita e o que dá
+            # tempo de alguém pagar à noite e conferir de manhã.
+            "payment_method_options[pix][expires_after_seconds]": "86400",
+        }
+        try:
+            resposta = requests.post(
+                "https://api.stripe.com/v1/checkout/sessions",
+                data=dados,
+                auth=(config.STRIPE_SECRET_KEY, ""),
+                timeout=20,
+            )
+        except Exception as erro:  # noqa: BLE001 - rede é falível
+            return CheckoutSession(ok=False, message=f"Não consegui falar com o gateway: {erro}")
+        if resposta.status_code >= 400:
+            return CheckoutSession(ok=False, message="O gateway recusou a cobrança por Pix.")
         corpo = resposta.json()
         return CheckoutSession(
             ok=True, url=corpo.get("url", ""), external_id=corpo.get("id", "")
@@ -157,6 +234,15 @@ class StripeProvider(PaymentProvider):
             cycle=str(metadados.get("cycle", "")),
             external_id=str(objeto.get("subscription") or objeto.get("id") or ""),
             amount_cents=int(objeto.get("amount_total") or objeto.get("amount") or 0),
+            # `mode` é do gateway; os metadados são nossos. Confiar só nos
+            # metadados evitaria depender do vocabulário dele, mas `mode` é o
+            # que a Stripe garante em toda sessão — os dois concordando é o
+            # sinal mais seguro de que isto foi um pagamento avulso.
+            method=(
+                METODO_PIX
+                if metadados.get("method") == METODO_PIX or objeto.get("mode") == "payment"
+                else METODO_CARTAO
+            ),
             occurred_at=dt.datetime.fromtimestamp(marca, dt.timezone.utc),
             raw=corpo,
         )

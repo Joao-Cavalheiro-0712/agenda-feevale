@@ -24,6 +24,8 @@ from agenda.models import (
     WebhookEventLog,
 )
 from agenda.payments.base import (
+    METODOS,
+    METODO_CARTAO,
     EVENT_PAYMENT_DISPUTED,
     EVENT_PAYMENT_REFUNDED,
     EVENT_SUBSCRIPTION_CANCELED,
@@ -32,6 +34,7 @@ from agenda.payments.base import (
     NullProvider,
     PaymentProvider,
     WebhookEvent,
+    recorrente,
 )
 
 _provedor: PaymentProvider | None = None
@@ -62,7 +65,8 @@ def enabled() -> bool:
 # --------------------------------------------------------------------------- #
 # Checkout
 # --------------------------------------------------------------------------- #
-def start_checkout(db: Session, user: User, *, plan: str, cycle: str, base_url: str):
+def start_checkout(db: Session, user: User, *, plan: str, cycle: str, base_url: str,
+                   method: str = METODO_CARTAO):
     """Cria a sessão de pagamento. O VALOR sai do nosso catálogo, sempre.
 
     O cliente escolhe plano e ciclo; quanto isso custa é decisão do servidor.
@@ -84,16 +88,20 @@ def start_checkout(db: Session, user: User, *, plan: str, cycle: str, base_url: 
     # O provedor aplica isso como desconto de uma parcela, não como preço.
     desconto = referrals.invitee_discount_available(db, user)
 
+    if method not in METODOS:
+        method = METODO_CARTAO
+
     sessao = provider().create_checkout(
         user=user, plan=plan, cycle=cycle, amount_cents=centavos,
         first_invoice_discount=desconto,
+        method=method,
         success_url=f"{base_url}/planos?pago=1",
         cancel_url=f"{base_url}/planos",
     )
     if sessao.ok:
         log(db, user_id=user.id, actor="user", action="CHECKOUT_STARTED",
             object_type="subscription", object_id=sessao.external_id,
-            after={"plan": plan, "cycle": cycle, "centavos": centavos})
+            after={"plan": plan, "cycle": cycle, "centavos": centavos, "metodo": method})
     return sessao
 
 
@@ -141,9 +149,13 @@ def _pagou(db: Session, user: User, evento: WebhookEvent) -> str:
     ciclo = evento.cycle if evento.cycle in {c.value for c in BillingCycle} else (
         BillingCycle.MONTHLY.value
     )
+    # Pix compra um período; cartão renova sozinho. A diferença precisa chegar
+    # ao banco, senão um pagamento avulso viraria plano pago vitalício.
+    renova = recorrente(evento.method)
     billing.change_plan(
         db, user, plano, cycle=ciclo,
         provider=provider().name, external_id=evento.external_id,
+        renews=renova, payment_method=evento.method,
     )
     # A indicação entra em carência; a recompensa só nasce depois da janela de
     # reembolso (core/referrals.py).
@@ -151,8 +163,9 @@ def _pagou(db: Session, user: User, evento: WebhookEvent) -> str:
     meses = referrals.apply_credits(db, user)
     log(db, user_id=user.id, actor="system", action="SUBSCRIPTION_PAID",
         object_type="subscription", object_id=evento.external_id,
-        after={"plan": plano, "cycle": ciclo, "creditos_aplicados": meses})
-    return "assinatura ativada"
+        after={"plan": plano, "cycle": ciclo, "metodo": evento.method,
+               "renova": renova, "creditos_aplicados": meses})
+    return "assinatura ativada" if renova else "período avulso ativado"
 
 
 def _atrasou(db: Session, user: User) -> str:

@@ -1099,6 +1099,7 @@ def subscribe_plan():
     """Troca de plano. A cobrança real depende do gateway configurado."""
     plano = request.form.get("plan", "")
     ciclo = request.form.get("cycle", BillingCycle.MONTHLY.value)
+    metodo = request.form.get("method", "card")
     if plano not in billing.PLANS or plano == PlanTier.INSTITUTION.value:
         flash("Plano inválido.", "error")
         return redirect(url_for("pages.plans_page"))
@@ -1127,7 +1128,7 @@ def subscribe_plan():
     if plano != PlanTier.FREE.value:
         try:
             sessao = pagamentos.start_checkout(
-                db(), user, plan=plano, cycle=ciclo,
+                db(), user, plan=plano, cycle=ciclo, method=metodo,
                 base_url=config.PUBLIC_URL or request.host_url.rstrip("/"),
             )
         except ValueError:

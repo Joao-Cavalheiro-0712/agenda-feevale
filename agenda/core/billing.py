@@ -252,6 +252,13 @@ def active_plan(db: Session, user: User) -> Plan:
         expirou = sub.current_period_end is None or _aware(sub.current_period_end) < _now()
         if expirou:
             return PLANS[PlanTier.FREE.value]
+    # Pagamento avulso (Pix) não renova sozinho: quando o período vence, a
+    # conta volta para o grátis. Sem esta linha, quem pagou um mês por Pix
+    # ficaria com o plano pago para sempre.
+    if not sub.renews and sub.plan != PlanTier.FREE.value:
+        fim = sub.current_period_end
+        if fim is None or _aware(fim) < _now():
+            return PLANS[PlanTier.FREE.value]
     if sub.status == SubscriptionStatus.TRIALING.value and sub.trial_ends_at:
         if _aware(sub.trial_ends_at) < _now():
             return PLANS[PlanTier.FREE.value]
@@ -360,6 +367,8 @@ def change_plan(
     cycle: str = BillingCycle.MONTHLY.value,
     provider: str = "manual",
     external_id: str = "",
+    renews: bool = True,
+    payment_method: str = "card",
 ) -> Subscription:
     if plan not in PLANS:
         raise ValueError("plano desconhecido")
@@ -374,12 +383,67 @@ def change_plan(
     )
     sub.provider = provider
     sub.external_id = external_id[:120]
+    sub.renews = renews if plan != PlanTier.FREE.value else True
+    sub.payment_method = payment_method[:20]
     sub.canceled_at = None if plan != PlanTier.FREE.value else _now()
     if plan != PlanTier.FREE.value:
         dias = 365 if cycle == BillingCycle.ANNUAL.value else 30
         sub.current_period_end = _now() + dt.timedelta(days=dias)
     db.flush()
     return sub
+
+
+# Quantos dias antes do fim avisar quem pagou avulso (Pix).
+AVISO_DE_VENCIMENTO_DIAS = 3
+
+
+def avisar_vencimentos(db: Session, *, now: dt.datetime | None = None) -> int:
+    """Avisa quem pagou por Pix que o período está acabando.
+
+    Sem cobrança recorrente, o silêncio é uma armadilha: a pessoa descobre que
+    perdeu o plano quando abre o app na véspera da prova. Um aviso três dias
+    antes custa nada e é a diferença entre renovar e xingar.
+    """
+    agora = now or _now()
+    limite = agora + dt.timedelta(days=AVISO_DE_VENCIMENTO_DIAS)
+    avisados = 0
+
+    candidatas = db.scalars(
+        select(Subscription).where(
+            Subscription.renews.is_(False),
+            Subscription.plan != PlanTier.FREE.value,
+            Subscription.status == SubscriptionStatus.ACTIVE.value,
+            Subscription.current_period_end.is_not(None),
+        )
+    ).all()
+    for sub in candidatas:
+        fim = _aware(sub.current_period_end)
+        if not (agora < fim <= limite):
+            continue
+        user = db.get(User, sub.user_id)
+        if user is None or user.deleted_at is not None:
+            continue
+        # Uma vez por período: sem esta marca, o worker mandaria o mesmo aviso
+        # a cada rodada e a notificação viraria ruído que ninguém lê.
+        if sub.renewal_notice_at is not None and _aware(sub.renewal_notice_at) > agora - dt.timedelta(days=AVISO_DE_VENCIMENTO_DIAS + 1):
+            continue
+        from agenda.core import notifications
+
+        dias = max((fim - agora).days, 0)
+        quando = "hoje" if dias == 0 else ("amanhã" if dias == 1 else f"em {dias} dias")
+        notifications.create(
+            db, user,
+            title=f"Seu {PLANS[sub.plan].name} acaba {quando}",
+            body=(
+                "Você pagou por Pix, que não renova sozinho. Para continuar com "
+                "tudo liberado, é só pagar de novo em Planos — leva um minuto."
+            ),
+            kind="billing",
+        )
+        sub.renewal_notice_at = agora
+        avisados += 1
+    db.flush()
+    return avisados
 
 
 def cancel(db: Session, user: User) -> Subscription:

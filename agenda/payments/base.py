@@ -23,6 +23,24 @@ import dataclasses
 import datetime as dt
 
 
+# Formas de pagamento. Cartão cobre Apple Pay e Google Pay: as carteiras não
+# são meios de pagamento separados — elas são um cartão apresentado sem digitar
+# número, e aparecem sozinhas no checkout quando o aparelho suporta.
+METODO_CARTAO = "card"
+METODO_PIX = "pix"
+METODOS = (METODO_CARTAO, METODO_PIX)
+
+# Pix NÃO faz cobrança recorrente. Isto não é limitação do nosso código: o
+# arranjo do Pix é de pagamento avulso, e cobrança automática exige Pix
+# Automático, que o gateway ainda não expõe. Então Pix compra um período, e a
+# conta volta para o grátis quando ele acaba — com aviso antes.
+METODOS_RECORRENTES = (METODO_CARTAO,)
+
+
+def recorrente(method: str) -> bool:
+    return method in METODOS_RECORRENTES
+
+
 @dataclasses.dataclass(frozen=True)
 class CheckoutSession:
     """O que o cliente precisa para pagar."""
@@ -48,6 +66,8 @@ class WebhookEvent:
     cycle: str = ""
     external_id: str = ""
     amount_cents: int = 0
+    # "card" ou "pix". Decide se a assinatura renova sozinha — Pix não renova.
+    method: str = METODO_CARTAO
     occurred_at: dt.datetime | None = None
     raw: dict = dataclasses.field(default_factory=dict)
 
@@ -82,6 +102,7 @@ class PaymentProvider:
     def create_checkout(
         self, *, user, plan: str, cycle: str, amount_cents: int,
         success_url: str, cancel_url: str, first_invoice_discount: float = 0.0,
+        method: str = METODO_CARTAO,
     ) -> CheckoutSession:
         """`first_invoice_discount` é fração (0.30 = 30%) e vale UMA parcela.
 
