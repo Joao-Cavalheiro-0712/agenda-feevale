@@ -15,6 +15,7 @@ from agenda.ai.providers import ai_available, get_speech_provider, record_usage
 from agenda.core import (
     academic,
     actions as actions_core,
+    backup,
     assistant,
     billing,
     notifications,
@@ -542,22 +543,10 @@ def plan_status():
 @bp.get("/export")
 @login_required
 def export_data():
-    """Exportação de dados do usuário (SPEC §80)."""
-    user = current_user()
-    events = db().scalars(select(Event).where(Event.user_id == user.id)).all()
-    subjects = academic.list_subjects(db(), user.id, active_only=False)
-    return jsonify(
-        {
-            "user": {"name": user.name, "email": user.email, "timezone": user.timezone},
-            "contexts": [
-                {"type": c.type, "institution": c.institution, "course": c.course_name,
-                 "semester": c.semester, "class": c.class_name}
-                for c in academic.list_contexts(db(), user.id, include_archived=True)
-            ],
-            "subjects": [
-                {"name": s.name, "short_name": s.short_name, "color": s.color, "status": s.status}
-                for s in subjects
-            ],
-            "events": [event_card(e, user) for e in events],
-        }
-    )
+    """Exportação de dados do usuário (SPEC §80, LGPD art. 18 V).
+
+    Delegada a `core.backup` para existir uma única definição de "o que é meu".
+    Duas exportações divergentes é como uma delas acaba vazando um campo que a
+    outra já tinha decidido não exportar.
+    """
+    return jsonify(backup.export_user(db(), current_user()))

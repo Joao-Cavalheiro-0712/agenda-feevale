@@ -5,6 +5,9 @@
     python -m agenda.cli migrate      aplica as migrations pendentes
     python -m agenda.cli check        verificação de sanidade da configuração
     python -m agenda.cli reset-schema apaga o schema (exige ALLOW_SCHEMA_RESET=1)
+    python -m agenda.cli backup        faz o dump e aplica a retenção
+    python -m agenda.cli backup-list   lista os backups guardados
+    python -m agenda.cli backup-verify restaura o último dump e confere
 """
 from __future__ import annotations
 
@@ -223,12 +226,63 @@ def _reset_schema() -> int:
     return 0
 
 
+def _backup() -> int:
+    from agenda.core import backup
+
+    if backup.BACKUP_DIR is None:
+        print("BACKUP_DIR não configurado — nada a fazer.")
+        return 2
+    resultado = backup.executar()
+    if not resultado.ok:
+        print(f"backup falhou: {resultado.detalhe}")
+        return 1
+    print(f"ok: {resultado.caminho} ({resultado.bytes / 1_048_576:.1f} MB)")
+    for nome in resultado.removidos:
+        print(f"  removido pela retenção: {nome}")
+    return 0
+
+
+def _backup_list() -> int:
+    from agenda.core import backup
+
+    linhas = backup.listar()
+    if not linhas:
+        print("nenhum backup encontrado.")
+        return 1
+    for linha in linhas:
+        print(f"{linha['quando']}  {linha['bytes'] / 1_048_576:8.1f} MB  {linha['arquivo']}")
+    return 0
+
+
+def _backup_verify() -> int:
+    """Restaura o backup mais recente e confere as tabelas críticas.
+
+    Existe porque backup que nunca foi restaurado não é backup, é esperança.
+    Deve rodar num job semanal de infraestrutura.
+    """
+    from pathlib import Path
+
+    from agenda.core import backup
+
+    linhas = backup.listar()
+    if not linhas:
+        print("nenhum backup para verificar.")
+        return 1
+    alvo = Path(backup.BACKUP_DIR) / linhas[0]["arquivo"]
+    resultado = backup.verificar(alvo)
+    print(f"{'ok' if resultado.ok else 'FALHOU'}: {alvo.name} — {resultado.detalhe}")
+    return 0 if resultado.ok else 1
+
+
 COMMANDS = {
     "vapid": _vapid,
     "secret": _secret,
     "migrate": _migrate,
     "check": _check,
     "reset-schema": _reset_schema,
+    "backup": _backup,
+    "backup-list": _backup_list,
+    "backup-verify": _backup_verify,
 }
 
 

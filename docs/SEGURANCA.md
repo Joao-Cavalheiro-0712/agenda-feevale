@@ -173,6 +173,71 @@ que é o teto de prejuízo de uma conta abusiva.
 * Logs de canal registram tamanho e telefone mascarado, nunca o conteúdo.
 * Perfis de crianças começam com automação desligada.
 
+## Backup e recuperação
+
+São dois backups diferentes, e confundi-los custa caro no dia do desastre.
+
+### O nosso (operacional)
+
+Responde a "o banco morreu / alguém apagou a tabela errada / a migração
+corrompeu dado". Roda às 02h30 pelo worker (`backup_tick`) e também na mão:
+
+```
+python -m agenda.cli backup          # dump + retenção
+python -m agenda.cli backup-list     # o que existe hoje
+python -m agenda.cli backup-verify   # RESTAURA o mais recente e confere
+```
+
+Decisões e o porquê:
+
+* **`pg_dump --format=custom`**, não cópia de arquivo. Cópia de um Postgres
+  vivo devolve um banco corrompido; o formato custom permite restaurar tabela
+  por tabela, que é o que se precisa quando o problema foi *uma* tabela.
+* **Retenção em escada 7/4/6** (diários/semanais/mensais). O desastre mais
+  comum não é o banco pegar fogo — é alguém descobrir três semanas depois que
+  um dado foi corrompido. Só o backup de ontem não cobre isso, e guardar tudo
+  enche o disco.
+* **`backup-verify` restaura de verdade** num banco descartável e confere a
+  contagem de `users`, `events`, `subjects` e `consent_records`. Backup que
+  nunca foi restaurado não é backup, é esperança. Roda semanalmente, fora do
+  processo que atende usuário (restaurar custa CPU e disco).
+* **Falha nunca é silenciosa.** `BACKUP_FALHOU` sai no log com o motivo, e a
+  CLI devolve código de saída diferente de zero. Backup que falha em silêncio
+  só é descoberto no dia em que era necessário.
+
+Configuração (`BACKUP_DIR` vazio desliga tudo):
+
+| Variável | Padrão | O que faz |
+|---|---|---|
+| `BACKUP_DIR` | *(vazio)* | Onde os dumps ficam. **Precisa ser um volume persistente**, não o disco efêmero do contêiner |
+| `BACKUP_KEEP_DAILY` | `7` | Diários mantidos |
+| `BACKUP_KEEP_WEEKLY` | `4` | Semanais mantidos |
+| `BACKUP_KEEP_MONTHLY` | `6` | Mensais mantidos |
+
+**O que ainda depende de operação, e é importante:** o dump fica cifrado em
+repouso só se o volume for cifrado. O arquivo tem hash de senha, telefone e
+agenda de menor de idade — vazar o backup é vazar a base inteira. Em Railway,
+isso significa um volume dedicado; num provedor de objeto (S3/R2), SSE ligado e
+bucket privado. O backup gerenciado do próprio Postgres do Railway **não
+substitui** este: ele vive na mesma conta, e "alguém apagou a conta" é um dos
+cenários que o backup existe para cobrir. Guarde uma cópia fora.
+
+### O do usuário (portabilidade)
+
+`GET /conta/meus-dados.json` (e `GET /api/export`, a mesma função). JSON legível
+com conta, consentimentos, contextos, matérias, aulas, compromissos, lembretes,
+blocos de estudo, documentos, conversas e vocabulário aprendido.
+
+O que **não** entra, e por quê: hash de senha (material de ataque offline que
+não serve para nada fora daqui), tokens, hash de IP, e id interno de outras
+pessoas. Exportar dado do titular não pode virar exportação de dado de
+terceiro. O `export_user` é escrito campo a campo de propósito — serializar o
+modelo por reflexão parece elegante até o dia em que alguém adiciona uma coluna
+sensível e ela sai no arquivo de todo mundo sem ninguém perceber.
+
+A resposta vai com `Cache-Control: no-store, private`: é a agenda inteira de
+uma pessoa, e não pode encostar em cache de proxy.
+
 ## O que ainda depende de configuração
 
 * `WHATSAPP_APP_SECRET` precisa existir em produção para o webhook funcionar.

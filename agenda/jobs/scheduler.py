@@ -97,6 +97,28 @@ def referral_tick() -> None:
             print(f"[jobs] falha ao qualificar indicações: {erro}")
 
 
+def backup_tick() -> None:
+    """Dump do banco, de madrugada.
+
+    Não roda a verificação de restauração aqui: restaurar custa CPU e disco, e
+    o processo que atende usuário não é o lugar disso. Verificação é job de
+    infraestrutura (`python -m agenda.cli backup-verify`).
+    """
+    from agenda.core import backup
+
+    if backup.BACKUP_DIR is None:
+        return
+    resultado = backup.executar()
+    if resultado.ok:
+        print(f"[jobs] backup {resultado.caminho.name} "
+              f"({resultado.bytes / 1_048_576:.1f} MB), "
+              f"{len(resultado.removidos)} antigos removidos.")
+    else:
+        # Backup que falha em silêncio é a pior categoria de falha: só se
+        # descobre no dia em que ele era necessário.
+        print(f"[jobs] BACKUP FALHOU: {resultado.detalhe}")
+
+
 def start() -> None:  # pragma: no cover - infra
     global _scheduler
     if _scheduler is not None:
@@ -114,6 +136,9 @@ def start() -> None:  # pragma: no cover - infra
     )
     _scheduler.add_job(
         referral_tick, "cron", hour=4, minute=0, id="referral.qualify", replace_existing=True
+    )
+    _scheduler.add_job(
+        backup_tick, "cron", hour=2, minute=30, id="backup.dump", replace_existing=True
     )
     _scheduler.start()
     print(f"[jobs] scheduler ativo (tick {config.NOTIFICATION_TICK_SECONDS}s).")

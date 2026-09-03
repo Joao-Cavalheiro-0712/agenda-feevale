@@ -197,7 +197,7 @@ def test_planner_json(client):
 
 def test_exportacao_de_dados(client):
     data = client.get("/api/export").get_json()
-    assert set(["user", "contexts", "subjects", "events"]).issubset(data.keys())
+    assert {"conta", "contextos", "materias", "compromissos"}.issubset(data.keys())
 
 
 def test_um_usuario_nao_ve_evento_de_outro(app, client, db, user):

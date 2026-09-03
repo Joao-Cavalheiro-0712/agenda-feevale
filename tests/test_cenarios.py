@@ -15,6 +15,7 @@ Personas:
 from __future__ import annotations
 
 import datetime as dt
+import json
 
 import pytest
 
@@ -427,8 +428,10 @@ def test_exportacao_da_mae_nao_inclui_dados_do_filho(familia, db):
 
 def test_exportacao_do_filho_traz_os_dados_dele(familia, db):
     dados = familia["client"].get("/api/export").get_json()
-    assert dados["user"]["email"] == "leo@example.com"
-    assert any(c["type"] == "ELEMENTARY" for c in dados["contexts"])
+    assert dados["conta"]["email"] == "leo@example.com"
+    assert any(c["tipo"] == "ELEMENTARY" for c in dados["contextos"])
+    # O arquivo do titular não pode carregar material de ataque offline.
+    assert "password_hash" not in json.dumps(dados)
 
 
 # --------------------------------------------------------------------------- #

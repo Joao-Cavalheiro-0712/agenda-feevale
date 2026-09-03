@@ -14,6 +14,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    Response,
     session as flask_session,
     url_for,
 )
@@ -23,6 +24,7 @@ from agenda import config
 from agenda.channels import whatsapp
 from agenda.core import (
     academic,
+    backup,
     billing,
     calendar_export,
     family,
@@ -965,6 +967,30 @@ def privacy_center():
             if link.guardian_id
         ],
         **_shell(active="profile"),
+    )
+
+
+@bp.route("/conta/meus-dados.json")
+@login_required
+@limited("export")
+def export_my_data():
+    """Portabilidade (LGPD art. 18 V) e backup do usuário no mesmo arquivo.
+
+    JSON legível, não formato proprietário: o direito à portabilidade só vale
+    se o arquivo servir em outro lugar. O calendário completo sai em ICS pelo
+    endereço de assinatura, que é o formato que Google e Apple leem.
+    """
+    corpo = backup.export_user_json(db(), current_user())
+    carimbo = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
+    return Response(
+        corpo,
+        mimetype="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="grifo-meus-dados-{carimbo}.json"',
+            # O arquivo tem a agenda inteira da pessoa: nunca em cache
+            # compartilhado, nunca em proxy.
+            "Cache-Control": "no-store, private",
+        },
     )
 
 
