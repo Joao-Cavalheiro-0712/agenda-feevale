@@ -9,3 +9,6 @@ venv/
 storage/
 .pytest_cache/
 .DS_Store
+
+# Apresentação comercial gerada — reproduzível, não versionada
+Grifo-apresentacao.pdf

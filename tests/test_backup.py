@@ -30,6 +30,40 @@ def _com_dados(db, user):
     return materia
 
 
+def test_exportacao_funciona_com_grade_de_aulas(db, user):
+    """Horário de aula é varchar(5) ("19:00"), não um objeto de tempo.
+
+    Este teste existe porque a exportação chamava `.isoformat()` em todo campo
+    de tempo e explodia para qualquer conta com grade cadastrada — que é toda
+    conta real. O Postgres e um seed de verdade acharam; a suíte não, porque
+    nenhum teste exportava uma conta com aula.
+    """
+    from agenda.models import ClassSchedule
+
+    contexto = academic.active_context(db, user.id)
+    materia = academic.upsert_subject(db, user.id, contexto.id, "Direito Penal II")
+    db.add(ClassSchedule(
+        user_id=user.id, subject_id=materia.id, weekday=0,
+        start_time="19:00", end_time="20:40",
+    ))
+    db.commit()
+
+    dados = backup.export_user(db, user)
+    assert dados["aulas"][0]["comeca"] == "19:00"
+    assert dados["aulas"][0]["termina"] == "20:40"
+    json.loads(backup.export_user_json(db, user))  # serializa sem estourar
+
+
+def test_exportacao_com_bloco_de_estudo(db, user):
+    """StudyBlock.start_time tem a mesma forma."""
+    from agenda.models import StudyBlock
+
+    db.add(StudyBlock(user_id=user.id, local_date=dt.date.today(),
+                      start_time="17:30", minutes=50, topic="Tutela de urgência"))
+    db.commit()
+    assert backup.export_user(db, user)["blocos_de_estudo"][0]["comeca"] == "17:30"
+
+
 def test_exportacao_traz_o_que_e_do_titular(db, user):
     _com_dados(db, user)
     dados = backup.export_user(db, user)

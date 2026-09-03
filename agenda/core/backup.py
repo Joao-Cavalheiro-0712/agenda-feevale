@@ -78,8 +78,20 @@ TABELAS_CRITICAS = ("users", "events", "subjects", "consent_records")
 # --------------------------------------------------------------------------- #
 # Backup do usuário (portabilidade — LGPD art. 18 V)
 # --------------------------------------------------------------------------- #
-def _quando(valor: dt.datetime | dt.date | None) -> str | None:
-    return valor.isoformat() if valor is not None else None
+def _quando(valor) -> str | None:
+    """Data, hora ou já-texto — devolve sempre texto, ou None.
+
+    Nem todo campo de tempo do schema é um objeto de tempo: horário de aula e
+    de bloco de estudo são `varchar(5)` ("19:00"), porque é assim que a pessoa
+    digita e é assim que a grade compara. Chamar `.isoformat()` neles explodia
+    a exportação inteira de quem tem grade cadastrada — e a suíte não pegava
+    porque nenhum teste exportava uma conta com aula.
+    """
+    if valor is None:
+        return None
+    if isinstance(valor, str):
+        return valor or None
+    return valor.isoformat()
 
 
 def export_user(db: Session, user: User) -> dict:

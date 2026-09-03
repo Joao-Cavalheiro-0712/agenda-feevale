@@ -35,6 +35,18 @@ PERIODS_PER_YEAR = {
     PeriodKind.CONTINUOUS.value: 1,
 }
 
+# Quanto dura, em dias, um período de cada tipo. Serve para decidir se um
+# intervalo informado pelo usuário é UM período ou vários.
+_DURACAO_TIPICA_EM_DIAS = {
+    PeriodKind.SEMESTER.value: 180,
+    PeriodKind.TRIMESTER.value: 120,
+    PeriodKind.QUADMESTER.value: 120,
+    PeriodKind.BIMESTER.value: 90,
+    PeriodKind.ANNUAL.value: 365,
+    PeriodKind.MODULE.value: 120,
+    PeriodKind.CONTINUOUS.value: 365,
+}
+
 # Janelas típicas do calendário brasileiro (mês inicial, mês final).
 _DEFAULT_WINDOWS: dict[str, list[tuple[int, int]]] = {
     PeriodKind.SEMESTER.value: [(2, 7), (8, 12)],
@@ -99,15 +111,39 @@ def plan_periods(
         return _with_labels(out, kind, year)
 
     if starts_on and ends_on and ends_on > starts_on:
+        # O onboarding pergunta "Começou em / Termina em" logo depois de
+        # perguntar em que semestre a pessoa está: ela está descrevendo O
+        # PERÍODO DELA, não o ano letivo. Dividir esse intervalo em dois
+        # inventava um semestre que não existe e batizava agosto–dezembro de
+        # "1º semestre" na tela inicial de quem está no segundo.
+        #
+        # Só faz sentido dividir quando o intervalo informado é grande o
+        # bastante para caber mais de um período de verdade.
         span = (ends_on - starts_on).days + 1
-        chunk = max(span // total, 1)
+        tipico = _DURACAO_TIPICA_EM_DIAS.get(kind, 180)
+        cabem = max(int(round(span / tipico)), 1) if tipico else 1
+        partes = min(cabem, total)
+
+        if partes <= 1:
+            return [{
+                "sequence": _sequencia_no_ano(kind, starts_on),
+                "starts_on": starts_on,
+                "ends_on": ends_on,
+                "kind": kind,
+                "year": year,
+                "label": period_label(kind, _sequencia_no_ano(kind, starts_on), year),
+            }]
+
+        chunk = max(span // partes, 1)
+        primeiro = _sequencia_no_ano(kind, starts_on)
         out = []
-        for index in range(total):
+        for index in range(partes):
             start = starts_on + dt.timedelta(days=chunk * index)
-            end = ends_on if index == total - 1 else start + dt.timedelta(days=chunk - 1)
+            end = ends_on if index == partes - 1 else start + dt.timedelta(days=chunk - 1)
             if start > ends_on:
                 break
-            out.append({"sequence": index + 1, "starts_on": start, "ends_on": min(end, ends_on)})
+            out.append({"sequence": primeiro + index, "starts_on": start,
+                        "ends_on": min(end, ends_on)})
         return _with_labels(out, kind, year)
 
     windows = _DEFAULT_WINDOWS.get(kind, _DEFAULT_WINDOWS[PeriodKind.SEMESTER.value])
@@ -116,6 +152,22 @@ def plan_periods(
         start, end = _month_range(year, start_month, end_month)
         out.append({"sequence": index + 1, "starts_on": start, "ends_on": end})
     return _with_labels(out, kind, year)
+
+
+def _sequencia_no_ano(kind: str, inicio: dt.date | None) -> int:
+    """Que número este período tem dentro do ano — pela data, não por contador.
+
+    Agosto a dezembro é o 2º semestre, não o 1º. Quem começa em agosto e vê
+    "1º semestre" na tela inicial conclui, com razão, que o app não entendeu
+    nada do que ele preencheu.
+    """
+    if inicio is None:
+        return 1
+    por_ano = PERIODS_PER_YEAR.get(kind, 2)
+    if por_ano <= 1:
+        return 1
+    meses_por_periodo = 12 / por_ano
+    return min(int((inicio.month - 1) // meses_por_periodo) + 1, por_ano)
 
 
 def _with_labels(items: list[dict], kind: str, year: int) -> list[dict]:

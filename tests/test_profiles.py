@@ -181,3 +181,74 @@ def test_automacao_desligada_segue_a_pessoa_e_nao_a_serie(client, db, user):
     assert client.post("/onboarding", data={**dados, "confirmo_adulto": "1"}).status_code == 302
     db.expire_all()
     assert db.get(type(user), user.id).auto_create_enabled is True
+
+# --------------------------------------------------------------------------- #
+# O intervalo que o usuário informa é O PERÍODO DELE, não o ano letivo
+#
+# O onboarding pergunta "Começou em / Termina em" logo depois de perguntar em
+# que semestre a pessoa está. Dividir esse intervalo pelo número de períodos do
+# ano inventava um semestre inexistente e escrevia "1º semestre" na tela
+# inicial de quem começou em agosto — errado no lugar mais visível do app.
+# --------------------------------------------------------------------------- #
+def test_intervalo_de_um_semestre_nao_vira_dois():
+    import datetime as dt
+
+    from agenda.core.periods import plan_periods
+
+    periodos = plan_periods(
+        "SEMESTER", year=2026,
+        starts_on=dt.date(2026, 8, 3), ends_on=dt.date(2026, 12, 12),
+    )
+    assert len(periodos) == 1, "agosto a dezembro é um semestre, não dois"
+    assert periodos[0]["label"] == "2º semestre de 2026"
+    assert periodos[0]["starts_on"] == dt.date(2026, 8, 3)
+    assert periodos[0]["ends_on"] == dt.date(2026, 12, 12)
+
+
+def test_semestre_de_inicio_de_ano_e_o_primeiro():
+    import datetime as dt
+
+    from agenda.core.periods import plan_periods
+
+    periodos = plan_periods(
+        "SEMESTER", year=2026,
+        starts_on=dt.date(2026, 3, 2), ends_on=dt.date(2026, 7, 10),
+    )
+    assert len(periodos) == 1
+    assert periodos[0]["label"] == "1º semestre de 2026"
+
+
+def test_intervalo_de_ano_inteiro_ainda_se_divide():
+    """Quem informa fevereiro a dezembro está descrevendo o ano — aí divide."""
+    import datetime as dt
+
+    from agenda.core.periods import plan_periods
+
+    periodos = plan_periods(
+        "SEMESTER", year=2026,
+        starts_on=dt.date(2026, 2, 1), ends_on=dt.date(2026, 12, 15),
+    )
+    assert len(periodos) == 2
+    assert [p["label"] for p in periodos] == [
+        "1º semestre de 2026", "2º semestre de 2026",
+    ]
+
+
+def test_bimestre_do_meio_do_ano_recebe_o_numero_certo():
+    import datetime as dt
+
+    from agenda.core.periods import plan_periods
+
+    periodos = plan_periods(
+        "BIMESTER", year=2026,
+        starts_on=dt.date(2026, 8, 1), ends_on=dt.date(2026, 9, 30),
+    )
+    assert len(periodos) == 1
+    assert periodos[0]["label"] == "3º bimestre de 2026"
+
+
+def test_sem_datas_o_calendario_padrao_continua_valendo():
+    from agenda.core.periods import plan_periods
+
+    periodos = plan_periods("SEMESTER", year=2026)
+    assert len(periodos) == 2
