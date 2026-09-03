@@ -19,11 +19,11 @@ os.environ.update(
     APP_NAME="Grifo",
 )
 
-from agenda.core import academic, events as ev, family, periods, privacy, study
+from agenda.core import academic, events as ev, family, periods, privacy
 from agenda.db import SessionLocal
 from agenda.models import (
-    AcademicPeriod, AssistantMessage, ClassSchedule, EducationContext,
-    Location, Notification, StudyBlock, Subject, Teacher, User,
+    AssistantMessage, ClassSchedule, EducationContext,
+    Location, Notification, StudyBlock, Teacher, User,
 )
 from agenda.security import hash_password
 
