@@ -165,6 +165,17 @@ RATE_LIMITS = {
 ADMIN_EMAILS = {e.strip().lower() for e in _env("ADMIN_EMAILS").split(",") if e.strip()}
 
 # --------------------------------------------------------------------------- #
+# Pagamento (SPEC §96)
+# --------------------------------------------------------------------------- #
+# Provedor: stripe | none. Sem chave, o checkout diz que não está ligado em vez
+# de fingir que funcionou.
+PAYMENT_PROVIDER = _env("PAYMENT_PROVIDER", "none").lower()
+STRIPE_SECRET_KEY = _env("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = _env("STRIPE_WEBHOOK_SECRET")
+# Janela de arrependimento do art. 49 do CDC.
+REFUND_WINDOW_DAYS = int(_env("REFUND_WINDOW_DAYS", "7"))
+
+# --------------------------------------------------------------------------- #
 # Privacidade e contato do titular (LGPD art. 41)
 # --------------------------------------------------------------------------- #
 PRIVACY_EMAIL = _env("PRIVACY_EMAIL", "privacidade@grifo.app")

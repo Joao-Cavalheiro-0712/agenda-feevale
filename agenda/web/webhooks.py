@@ -79,3 +79,39 @@ def telegram_inbound():
     except Exception as exc:  # noqa: BLE001
         print(f"[webhook] telegram: {exc}")
     return "", 200
+
+
+# --------------------------------------------------------------------------- #
+# Pagamento
+# --------------------------------------------------------------------------- #
+@bp.post("/pagamento")
+def payment_inbound():
+    """Webhook do gateway — o único caminho pelo qual dinheiro vira plano.
+
+    A ordem aqui é deliberada e cada passo tem um ataque correspondente:
+
+    1. rate limit — inundar o endpoint é DoS barato;
+    2. assinatura e data — sem isso qualquer um libera assinatura com um curl;
+    3. idempotência — o gateway reenvia, e reprocessar concede dois períodos;
+    4. 200 mesmo no que não entendemos — devolver erro faz o gateway reenviar
+       para sempre um evento que não nos interessa.
+
+    Nunca respondemos com detalhe do erro: quem manda webhook forjado não pode
+    aprender por que a tentativa falhou.
+    """
+    from agenda.payments import service
+
+    identity = request.headers.get("X-Forwarded-For") or request.remote_addr or "pay"
+    if not rate_limit("webhook", identity):
+        return "", 429
+
+    corpo = request.get_data()
+    evento = service.provider().verify_webhook(corpo, request.headers)
+    if evento is None:
+        current_app.logger.warning("webhook de pagamento recusado")
+        return "", 403
+
+    with session_scope() as db:
+        resultado = service.handle(db, evento)
+    current_app.logger.info("webhook de pagamento: %s → %s", evento.type, resultado)
+    return "", 200

@@ -896,6 +896,28 @@ class StudyBlock(Base):
     subject: Mapped[Subject | None] = relationship()
 
 
+class WebhookEventLog(Base):
+    """Todo evento de gateway já processado.
+
+    Existe por uma razão só: idempotência. Gateway reenvia o mesmo evento
+    quando não recebe 200 na primeira, e processar duas vezes um
+    "subscription.paid" concede dois períodos. A chave única no id do evento é
+    o que impede isso, no banco e não na esperança.
+    """
+
+    __tablename__ = "webhook_events"
+    __table_args__ = (UniqueConstraint("event_id", name="uq_webhook_event_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    event_id: Mapped[str] = mapped_column(String(120), index=True)
+    provider: Mapped[str] = mapped_column(String(30), default="")
+    type: Mapped[str] = mapped_column(String(60), default="")
+    user_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Indicação — crescimento sem tráfego pago
 # --------------------------------------------------------------------------- #

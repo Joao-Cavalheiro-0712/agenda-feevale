@@ -1029,6 +1029,7 @@ def start_trial():
 
 
 @bp.post("/planos/assinar")
+@limited("checkout")
 @login_required
 def subscribe_plan():
     """Troca de plano. A cobrança real depende do gateway configurado."""
@@ -1047,8 +1048,26 @@ def subscribe_plan():
         )
         return redirect(url_for("pages.plans_page"))
     from agenda.core import referrals
+    from agenda.payments import service as pagamentos
 
     user = current_user()
+
+    # Com gateway ligado, o plano NÃO muda aqui: quem muda é o webhook, depois
+    # do dinheiro entrar. Esta rota só leva a pessoa para o checkout.
+    if pagamentos.enabled():
+        try:
+            sessao = pagamentos.start_checkout(
+                db(), user, plan=plano, cycle=ciclo,
+                base_url=config.PUBLIC_URL or request.host_url.rstrip("/"),
+            )
+        except ValueError:
+            flash("Plano inválido.", "error")
+            return redirect(url_for("pages.plans_page"))
+        if not sessao.ok:
+            flash(sessao.message or "Não consegui abrir o pagamento.", "error")
+            return redirect(url_for("pages.plans_page"))
+        return redirect(sessao.url)
+
     billing.change_plan(db(), user, plano, cycle=ciclo)
     if plano != PlanTier.FREE.value:
         # A indicação entra em carência agora; a recompensa de quem indicou só
