@@ -306,3 +306,82 @@ def test_registro_de_tratamento_declara_base_legal_de_tudo():
 @pytest.mark.parametrize("ano,esperado", [(2000, True), (dt.date.today().year - 17, False)])
 def test_maioridade(ano, esperado):
     assert privacy.is_adult(ano) is esperado
+
+
+# --------------------------------------------------------------------------- #
+# Segunda linha: idade declarada que não bate com o nível escolhido
+# --------------------------------------------------------------------------- #
+def test_conta_adulta_em_nivel_infantil_pergunta_de_quem_e_a_agenda(app, db):
+    """Criança que mentiu o ano cai aqui — e o pai que usou a conta errada também."""
+    client = app.test_client()
+    client.get("/criar-conta")
+    client.post("/criar-conta", data={
+        "csrf_token": _csrf(client), "name": "Tinho", "email": "t@example.com",
+        "password": "senhaforte123", "birth_year": "1990", "accept_terms": "on",
+    })
+
+    resposta = client.post("/onboarding", data={
+        "csrf_token": _csrf(client), "type": "ELEMENTARY", "grade_name": "5º ano",
+    })
+    assert resposta.status_code == 200
+    corpo = resposta.get_data(as_text=True)
+    assert "De quem é essa" in corpo
+    # Nada foi criado ainda: o onboarding não passou.
+    pessoa = db.query(User).filter_by(email="t@example.com").first()
+    assert pessoa.onboarding_done is False
+
+
+def test_adulto_em_eja_segue_confirmando(app, db):
+    client = app.test_client()
+    client.get("/criar-conta")
+    client.post("/criar-conta", data={
+        "csrf_token": _csrf(client), "name": "Dona Rita", "email": "rita@example.com",
+        "password": "senhaforte123", "birth_year": "1970", "accept_terms": "on",
+    })
+    resposta = client.post("/onboarding", data={
+        "csrf_token": _csrf(client), "type": "ELEMENTARY", "grade_name": "5º ano",
+        "confirmo_adulto": "1",
+    })
+    assert resposta.status_code == 302
+    db.expire_all()
+    assert db.query(User).filter_by(email="rita@example.com").first().onboarding_done is True
+
+
+def test_ensino_medio_nao_dispara_a_pergunta(app, db):
+    """Aos 18 é comum estar no ensino médio: barrar seria falso positivo."""
+    client = app.test_client()
+    client.get("/criar-conta")
+    client.post("/criar-conta", data={
+        "csrf_token": _csrf(client), "name": "Bea", "email": "bea@example.com",
+        "password": "senhaforte123", "birth_year": str(dt.date.today().year - 18),
+        "accept_terms": "on",
+    })
+    resposta = client.post("/onboarding", data={
+        "csrf_token": _csrf(client), "type": "HIGH_SCHOOL", "grade_name": "3º ano",
+    })
+    assert resposta.status_code == 302
+
+
+def test_admin_marca_conta_como_de_menor_e_ela_trava(app, db, user):
+    admin = User(
+        name="Operação", email="admin@example.com",
+        password_hash=hash_password("senhaforte123"), onboarding_done=True,
+        birth_year=1980, is_admin=True,
+    )
+    db.add(admin)
+    db.flush()
+    privacy.accept_documents(db, admin, ip="127.0.0.1")
+    db.commit()
+
+    painel = _entrar(app, "admin@example.com", "senhaforte123")
+    resposta = painel.post(
+        f"/admin/usuarios/{user.id}/menor", data={"csrf_token": _csrf(painel)}
+    )
+    assert resposta.status_code == 302
+
+    db.expire_all()
+    marcado = db.get(User, user.id)
+    assert marcado.is_minor and marcado.guardian_consent_at is None
+    # A sessão do titular foi encerrada e a conta responde travada.
+    dele = _entrar(app, "joao@example.com", "segredo123")
+    assert dele.get("/hoje").status_code == 403

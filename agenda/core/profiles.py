@@ -478,6 +478,22 @@ def offered_types(education_type: str | None) -> list[tuple[str, str]]:
 def has_feature(education_type: str | None, feature: str) -> bool:
     return feature in profile_for(education_type).features
 
+# Níveis que, na prática, só existem para crianças. Ensino médio e técnico
+# ficam de fora de propósito: aos 18 é comum e legítimo estar neles (EJA,
+# repetência, quem voltou a estudar). Aqui a lista é só dos que, informados por
+# uma conta adulta, indicam ou uma criança que mentiu a idade ou um pai
+# organizando a agenda do filho na conta errada.
+CHILD_ONLY_TYPES = (
+    EducationType.EARLY_CHILDHOOD.value,
+    EducationType.ELEMENTARY.value,
+    EducationType.MIDDLE_SCHOOL.value,
+)
+
+
+def is_child_only_profile(education_type: str | None) -> bool:
+    return (education_type or "") in CHILD_ONLY_TYPES
+
+
 def is_minor_profile(education_type: str | None) -> bool:
     """Perfis tipicamente de crianças e adolescentes (SPEC §80, §81).
 

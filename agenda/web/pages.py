@@ -133,6 +133,24 @@ def onboarding():
             education_type = EducationType.OTHER.value
         perfil = profiles.profile_for(education_type)
 
+        # Segunda linha de defesa contra idade declarada falsamente. Uma conta
+        # adulta escolhendo um nível que só existe para criança é ou uma
+        # criança que mentiu o ano, ou um pai montando a agenda do filho no
+        # lugar errado. Nos dois casos o destino certo é a conta do estudante
+        # criada pelo responsável. Não acusamos ninguém: perguntamos de quem é
+        # a agenda, porque adulto em EJA existe e não pode ser barrado.
+        if (
+            profiles.is_child_only_profile(education_type)
+            and not user.is_minor
+            and request.form.get("confirmo_adulto") != "1"
+        ):
+            return render_template(
+                "legal/de_quem_e_a_agenda.html",
+                nivel=education_type,
+                nivel_label=perfil.label,
+                dados=request.form,
+            ), 200
+
         period_kind = request.form.get("period_kind") or perfil.default_period_kind
         if period_kind not in {k.value for k in PeriodKind}:
             period_kind = perfil.default_period_kind
@@ -1367,7 +1385,44 @@ def admin():
         cost_per_user=round(total_cost / len(users), 4) if users else 0,
         failures=[d for d in documents if d.status == "FAILED"],
         flags=config.FEATURE_FLAGS,
+        menores=[u for u in users if u.is_minor],
     )
+
+
+@bp.post("/admin/usuarios/<user_id>/menor")
+@login_required
+@admin_required
+def admin_flag_minor(user_id: str):
+    """Marca (ou desmarca) uma conta como de menor sem autorização.
+
+    É o fim da linha de um aviso recebido pelo canal de privacidade: alguém
+    informou que a conta é de uma criança. Marcar aqui derruba a conta na mesma
+    hora pela trava de consentimento — o acesso só volta quando um responsável
+    autorizar. Não apagamos nada: o titular (e o responsável) continuam podendo
+    exportar e pedir exclusão.
+    """
+    alvo = db().get(User, user_id)
+    if alvo is None or alvo.deleted_at is not None:
+        abort(404)
+
+    marcar = request.form.get("acao") != "adulto"
+    alvo.is_minor = marcar
+    if marcar:
+        alvo.guardian_consent_at = None
+        alvo.auto_create_enabled = False
+        alvo.ai_processing_enabled = False
+        sessions.revoke_all(db(), alvo)
+    from agenda.core.events import log as log_event
+
+    log_event(db(), user_id=alvo.id, actor="admin", action="FLAG_MINOR",
+              object_type="user", object_id=alvo.id,
+              after={"is_minor": marcar, "by": current_user().id})
+    flash(
+        "Conta marcada como de menor e pausada até a autorização do responsável."
+        if marcar else "Conta marcada como adulta.",
+        "success",
+    )
+    return redirect(url_for("pages.admin"))
 
 
 # --------------------------------------------------------------------------- #

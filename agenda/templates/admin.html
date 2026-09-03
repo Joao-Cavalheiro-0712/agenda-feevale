@@ -24,6 +24,33 @@
   {% endfor %}
 </section>
 
+<section class="section"><header><h3>Contas marcadas como de menor</h3><span class="count num">{{ menores|length }}</span></header>
+  <p class="tiny muted" style="margin:0 0 var(--s3)">
+    Contas pausadas esperando a autorização de um responsável. Use quando o canal de
+    privacidade receber o aviso de que uma conta é de uma criança.
+  </p>
+  {% for pessoa in menores %}
+    <div class="item">
+      <span class="rail" style="background:var(--alerta)"></span>
+      <span class="time empty num" style="font-size:.72rem">{{ pessoa.birth_year or '—' }}</span>
+      <span class="body">
+        <span class="title">{{ pessoa.name or 'sem nome' }}</span>
+        <span class="meta">
+          <span class="tag {{ 'feito' if pessoa.guardian_consent_at else '' }}">
+            {{ 'autorizada' if pessoa.guardian_consent_at else 'pausada' }}</span>
+        </span>
+      </span>
+      <form method="post" action="{{ url_for('pages.admin_flag_minor', user_id=pessoa.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="acao" value="adulto">
+        <button class="btn sm ghost" type="submit">Desmarcar</button>
+      </form>
+    </div>
+  {% else %}
+    <p class="tiny muted">Nenhuma.</p>
+  {% endfor %}
+</section>
+
 {% if failures %}
 <section class="section"><header><h3>Documentos com falha</h3></header>
   {% for document in failures %}

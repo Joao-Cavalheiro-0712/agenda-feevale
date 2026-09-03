@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
+{% block title %}De quem é essa agenda? · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><span class="wordmark">{{ mark() }}{{ APP_NAME }}</span></div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead" style="padding-top:var(--s6)">
+  <p class="label kicker">Só para acertar o caminho</p>
+  <h2 class="h-page">De quem é essa <span class="grifo-sob">agenda</span>?</h2>
+  <p class="sub">
+    Você escolheu <strong>{{ nivel_label }}</strong>. Se a agenda é de uma criança,
+    a conta precisa ser dela — criada por você, com a sua autorização. É o que a lei pede,
+    e também é melhor assim: ela usa no celular dela, você acompanha do seu.
+  </p>
+</div>
+
+<div class="stack g4" style="max-width:420px">
+  <a class="btn marca block" href="{{ url_for('pages.family_new_student') }}">
+    É de um filho ou de uma criança
+  </a>
+
+  <form method="post" action="{{ url_for('pages.onboarding') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="confirmo_adulto" value="1">
+    {% for campo, valor in dados.items() %}
+      {% if campo != 'csrf_token' %}<input type="hidden" name="{{ campo }}" value="{{ valor }}">{% endif %}
+    {% endfor %}
+    <button class="btn ghost block" type="submit">
+      Sou eu que estudo neste nível, e tenho 18 anos ou mais
+    </button>
+  </form>
+</div>
+
+<p class="tiny muted" style="margin-top:var(--s5);max-width:46ch">
+  Adulto que voltou a estudar (EJA, supletivo) segue pelo segundo botão sem problema nenhum.
+  Se alguém criou uma conta aqui informando uma idade que não é a dele, escreva para
+  {{ privacy_email }}: a gente bloqueia a conta e devolve o controle a quem é responsável.
+</p>
+{% endblock %}

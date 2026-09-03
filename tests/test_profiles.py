@@ -167,9 +167,14 @@ def test_onboarding_de_cada_nivel_grava_o_periodo_certo(client, db, user):
 def test_onboarding_de_crianca_desliga_automacao(client, db, user):
     with client.session_transaction() as session:
         token = session.get("csrf")
-    client.post("/onboarding", data={
+    dados = {
         "csrf_token": token, "type": "ELEMENTARY", "institution": "Escola",
         "grade_name": "5º ano", "period_kind": "BIMESTER",
-    })
+    }
+    # Conta adulta escolhendo nível infantil primeiro responde de quem é a
+    # agenda (ver test_privacidade.py); aqui interessa o efeito depois disso.
+    assert client.post("/onboarding", data=dados).status_code == 200
+    resposta = client.post("/onboarding", data={**dados, "confirmo_adulto": "1"})
+    assert resposta.status_code == 302
     db.expire_all()
     assert db.get(type(user), user.id).auto_create_enabled is False

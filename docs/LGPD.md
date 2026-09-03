@@ -39,6 +39,36 @@ Padrões mais protetivos para menores, ligados automaticamente:
 * sem publicidade e sem perfilamento comportamental (não existem no produto);
 * o responsável pode revisar, corrigir e pedir exclusão a qualquer momento.
 
+### E se a criança mentir a idade?
+
+Nenhum serviço na internet resolve isso sozinho — verificar idade de verdade
+exigiria documento ou cartão de crédito, o que a lei **não** exige e criaria um
+problema de privacidade maior do que o que resolve. O que a lei cobra é esforço
+razoável, um caminho claro para o responsável e ação quando o fato chega ao seu
+conhecimento. São três camadas:
+
+1. **Pergunta direta no cadastro.** Idade declarada abaixo de 18 → conta não é
+   criada, e a tela explica o caminho do responsável.
+2. **Conferência cruzada no onboarding.** Uma conta que se declarou adulta e
+   escolhe educação infantil, anos iniciais ou anos finais do fundamental é
+   interrompida com *"de quem é essa agenda?"*, com um botão que leva direto à
+   criação da conta pelo responsável. Ensino médio e técnico **não** disparam a
+   pergunta: aos 18 é comum e legítimo estar neles (EJA, repetência, quem voltou
+   a estudar), e barrar isso seria falso positivo. Enquanto a pergunta não for
+   respondida, o onboarding não conclui.
+3. **Remediação quando alguém avisa.** O canal de privacidade recebe o aviso e a
+   operação marca a conta no painel (`/admin`): ela é pausada na hora pela trava
+   de consentimento, as sessões são encerradas, automação e IA são desligadas, e
+   o acesso só volta com a autorização de um responsável. Nada é apagado — o
+   titular e o responsável continuam podendo exportar e pedir exclusão.
+
+Uma criança determinada a mentir passa pela camada 2 clicando "sou eu que
+estudo". O que fica registrado é que perguntamos duas vezes, bloqueamos quando
+soubemos e temos um caminho de correção — que é exatamente o que se cobra do
+controlador. E, em qualquer cenário, o produto não faz publicidade, não faz
+perfilamento e não vende dado — as três coisas que transformam um cadastro de
+menor em processo.
+
 ## 2. Prova do consentimento (art. 8º §1º)
 
 O ônus de provar que o titular consentiu é do controlador. A prova é a tabela
