@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import functools
 
-from flask import g, jsonify, redirect, request, session, url_for
+from flask import g, jsonify, redirect, render_template, request, session, url_for
 
 from agenda import config
 from agenda.core import sessions
@@ -12,6 +12,22 @@ from agenda.models import User
 from agenda.security import csp_nonce, csrf_ok, new_csrf_token, rate_limit
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+# Rotas que continuam abertas para um usuário logado que está bloqueado por
+# pendência de consentimento. É deliberadamente curto: ler os documentos,
+# resolver a pendência, sair da conta e levar seus dados embora.
+CONSENT_FREE_ENDPOINTS = {
+    "pages.terms_page",
+    "pages.privacy_page",
+    "pages.accept_documents_page",
+    "pages.privacy_center",
+    "pages.manifest",
+    "pages.offline",
+    "pages.service_worker",
+    "auth.logout",
+    "api.export_data",
+    "static",
+}
 
 
 def db():
@@ -28,6 +44,9 @@ def init_app(app) -> None:
         if "csrf" not in session:
             session["csrf"] = new_csrf_token()
         g.user = _load_user()
+        bloqueio = _consent_gate()
+        if bloqueio is not None:
+            return bloqueio
         if request.method not in SAFE_METHODS and not _csrf_exempt():
             submitted = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token")
             if not csrf_ok(session.get("csrf"), submitted):
@@ -48,6 +67,31 @@ def init_app(app) -> None:
                 database.rollback()
         finally:
             database.close()
+
+
+def _consent_gate():
+    """Trava o app enquanto houver pendência de consentimento.
+
+    Fecha por padrão: sem aceite vigente dos documentos, ou sem consentimento
+    do responsável quando a conta é de menor, nenhuma rota do produto responde.
+    Assim a pendência não depende de cada rota lembrar de checar.
+    """
+    user = getattr(g, "user", None)
+    if user is None:
+        return None
+    if request.endpoint in CONSENT_FREE_ENDPOINTS:
+        return None
+
+    from agenda.core import privacy
+
+    motivo = privacy.blocked_reason(db(), user)
+    if motivo is None:
+        return None
+    if request.path.startswith("/api/") or request.path.startswith("/webhooks/"):
+        return jsonify({"error": "Consentimento pendente.", "reason": motivo}), 403
+    if motivo == "responsavel":
+        return render_template("legal/precisa_responsavel.html", user=user), 403
+    return redirect(url_for("pages.accept_documents_page"))
 
 
 def _csrf_exempt() -> bool:

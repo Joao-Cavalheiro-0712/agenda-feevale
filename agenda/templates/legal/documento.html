@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
+{% block title %}{{ titulo }} · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="wordmark" href="{{ url_for('pages.home') }}">{{ mark() }}{{ APP_NAME }}</a>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead" style="padding-top:var(--s5)">
+  <p class="label kicker">Documento · versão {{ versao }}</p>
+  <h2 class="h-page">{{ titulo_marcado|safe }}</h2>
+  <p class="sub">{{ resumo }}</p>
+</div>
+
+<article class="legal">
+  {% for secao in secoes %}
+    <section class="section">
+      <header><h3>{{ secao.titulo }}</h3></header>
+      {% for bloco in secao.blocos %}
+        {% if bloco is string %}
+          <p class="legal-p">{{ bloco }}</p>
+        {% elif bloco.tipo == 'lista' %}
+          <ul class="legal-ul">
+            {% for item in bloco.itens %}<li>{{ item }}</li>{% endfor %}
+          </ul>
+        {% elif bloco.tipo == 'tabela_tratamento' %}
+          <div class="tabela-wrap">
+            <table class="tabela">
+              <thead><tr><th>Para quê</th><th>Quais dados</th><th>Base legal</th><th>Por quanto tempo</th></tr></thead>
+              <tbody>
+                {% for linha in tratamento %}
+                  <tr>
+                    <td>{{ linha.finalidade }}</td>
+                    <td>{{ linha.dados }}</td>
+                    <td>{{ linha.base_legal }}</td>
+                    <td>{{ linha.retencao }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% elif bloco.tipo == 'tabela_subprocessadores' %}
+          <div class="tabela-wrap">
+            <table class="tabela">
+              <thead><tr><th>Quem</th><th>Para quê</th><th>Onde</th><th>O que recebe</th></tr></thead>
+              <tbody>
+                {% for linha in subprocessadores %}
+                  <tr>
+                    <td>{{ linha.nome }}</td>
+                    <td>{{ linha.papel }}</td>
+                    <td>{{ linha.pais }}</td>
+                    <td>{{ linha.dados }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </section>
+  {% endfor %}
+</article>
+
+<p class="tiny muted center" style="margin:var(--s6) 0 var(--s7)">
+  {{ APP_NAME }} · <a class="link" href="{{ url_for('pages.terms_page') }}">Termos de uso</a>
+  · <a class="link" href="{{ url_for('pages.privacy_page') }}">Política de privacidade</a>
+  <br>Dúvidas de privacidade: {{ contato }}
+</p>
+{% endblock %}

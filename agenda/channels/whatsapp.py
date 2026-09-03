@@ -180,6 +180,25 @@ def process(db: Session, message: ChannelMessage) -> str:
         return reply
 
     message.user_id = user.id
+
+    # O canal também respeita a trava de consentimento: o webhook não passa
+    # pelo before_request da web, então a checagem é feita aqui.
+    from agenda.core import privacy
+
+    pendencia = privacy.blocked_reason(db, user)
+    if pendencia is not None:
+        reply = (
+            "Sua conta está pausada esperando a autorização do responsável. "
+            "Peça para ele concluir no aplicativo."
+            if pendencia == "responsavel" else
+            "Atualizamos os termos e a política. Abra o aplicativo para aceitar "
+            "a nova versão e eu volto a organizar sua agenda por aqui."
+        )
+        message.status = "BLOCKED"
+        message.processed_at = dt.datetime.now(dt.timezone.utc)
+        send_text(db, user, reply)
+        return reply
+
     text = message.text or ""
 
     if message.kind == "audio":
@@ -226,7 +245,11 @@ def _unlinked_reply(db: Session, message: ChannelMessage) -> str:
 
 def _transcribe(db: Session, user: User, message: ChannelMessage) -> str:
     from agenda.ai.providers import get_speech_provider, record_usage
+    from agenda.core import privacy
 
+    if not privacy.ai_allowed(user):
+        message.error = "consentimento de interpretação automática revogado"
+        return ""
     audio = download_media(message.media_id)
     if not audio:
         return ""

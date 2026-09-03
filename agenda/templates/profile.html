@@ -130,6 +130,7 @@
   <p class="tiny muted" style="margin:0 0 var(--s4)">São seus. Leve embora ou apague quando quiser.</p>
   <div class="stack g4">
     <a class="btn ghost block" href="{{ url_for('api.export_data') }}" download>Exportar tudo (JSON)</a>
+    <a class="btn ghost block" href="{{ url_for('pages.privacy_center') }}">Privacidade e consentimentos</a>
     <a class="btn ghost block" href="{{ url_for('pages.security_page') }}">Segurança e dispositivos</a>
     <form method="post" action="{{ url_for('auth.logout') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -141,5 +142,7 @@
 <p class="tiny muted center" style="margin:var(--s6) 0 var(--s7)">
   <span class="wordmark" style="font-size:.9rem;opacity:.6">{{ mark() }}{{ APP_NAME }}</span>
   <br>versão {{ version }}
+  <br><a class="link" href="{{ url_for('pages.terms_page') }}">Termos</a>
+  · <a class="link" href="{{ url_for('pages.privacy_page') }}">Privacidade</a>
 </p>
 {% endblock %}

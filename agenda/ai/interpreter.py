@@ -15,7 +15,7 @@ from agenda import config
 from agenda.ai import heuristics, prompts
 from agenda.ai.context import build_context_block
 from agenda.ai.providers import ai_available, get_provider, record_usage
-from agenda.core import academic, duplicates, planner, recurrence
+from agenda.core import academic, duplicates, planner, privacy, recurrence
 from agenda.core.actions import ActionProposal, Intent
 from agenda.core.dates import resolve_expression
 from agenda.core.text import norm
@@ -45,7 +45,9 @@ def interpret(
         return InterpretResult(reply="Não entendi. Pode repetir?")
 
     result = InterpretResult()
-    if ai_available():
+    # Consentimento revogado (art. 8º §5º) = nada de provedor externo. A
+    # heurística local continua montando a agenda.
+    if ai_available() and privacy.ai_allowed(user):
         result = _interpret_with_ai(db, user, text, channel=channel)
     if not result.proposals:
         result = _interpret_heuristic(db, user, text, channel=channel)

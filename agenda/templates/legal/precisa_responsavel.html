@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
+{% block title %}Falta o responsável · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><span class="wordmark">{{ mark() }}{{ APP_NAME }}</span></div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead" style="padding-top:var(--s6)">
+  <p class="label kicker">Conta bloqueada</p>
+  <h2 class="h-page">Falta a autorização do seu <span class="grifo-sob">responsável</span></h2>
+  <p class="sub">
+    Para menores de 18 anos, a lei brasileira exige que um dos pais ou o responsável legal
+    autorize o uso do serviço e o tratamento dos dados. Enquanto isso não acontece, sua conta
+    fica pausada — nada é apagado.
+  </p>
+</div>
+
+<section class="section">
+  <header><h3>O que o responsável precisa fazer</h3></header>
+  <ol class="passos">
+    <li>Criar a conta dele no {{ APP_NAME }} (ou entrar, se já tiver).</li>
+    <li>Ir em <strong>Perfil → Família → Criar conta de estudante</strong>.</li>
+    <li>Usar o seu e-mail{% if user and user.email %} (<strong>{{ user.email }}</strong>){% endif %} e autorizar o uso.</li>
+  </ol>
+  <p class="tiny muted" style="margin-top:var(--s4)">
+    Se o responsável já tem conta e quer apenas autorizar esta aqui, escreva para
+    {{ privacy_email }} com o e-mail das duas contas — a gente resolve.
+  </p>
+</section>
+
+<div class="stack g4" style="max-width:380px">
+  <a class="btn ghost block" href="{{ url_for('api.export_data') }}" download>Exportar meus dados</a>
+  <form method="post" action="{{ url_for('auth.logout') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn soft block" type="submit">Sair</button>
+  </form>
+</div>
+{% endblock %}

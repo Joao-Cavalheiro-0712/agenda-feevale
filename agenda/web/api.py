@@ -19,6 +19,7 @@ from agenda.core import (
     billing,
     notifications,
     planner,
+    privacy,
     scope,
     study,
 )
@@ -80,6 +81,16 @@ def capture():
         data = audio.read()
         if len(data) > config.MAX_UPLOAD_BYTES:
             return jsonify({"status": "REJECTED", "message": "Áudio muito longo."}), 400
+        if not privacy.ai_allowed(user):
+            return jsonify(
+                {
+                    "status": "REJECTED",
+                    "message": (
+                        "A interpretação automática está desligada na sua conta. "
+                        "Ligue em Perfil › Privacidade para enviar áudio."
+                    ),
+                }
+            ), 403
         if not ai_available():
             return jsonify(
                 {
@@ -128,6 +139,10 @@ def onboarding_voice():
     texto = (request.form.get("text") or "").strip()[:4000]
 
     if audio is not None:
+        if not privacy.ai_allowed(user):
+            return jsonify(
+                {"ok": False, "reason": "Interpretação automática desligada na sua conta."}
+            ), 403
         dados = audio.read()
         if len(dados) > config.MAX_UPLOAD_BYTES:
             return jsonify({"ok": False, "reason": "Áudio muito longo."}), 400

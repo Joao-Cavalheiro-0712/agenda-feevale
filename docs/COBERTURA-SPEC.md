@@ -80,6 +80,8 @@ escopo (P1/P2/P3 ou dependente de contrato externo).
 | 139–140 | Materiais e checklists | ✅ | checklist no evento, com extração automática de "levar cartolina e cola" |
 | 141 | Tempo real | ✅ | SSE em `web/realtime.py`: o que chega pelo WhatsApp aparece na aba aberta |
 
+| — | Consentimento e LGPD | ✅ | termos e política versionados, prova de aceite com hash, trava fail-closed, menor de 18 só por conta criada pelo responsável — ver [`LGPD.md`](LGPD.md) |
+
 ## O que ainda depende de terceiros
 
 Tudo que falta agora depende de credencial ou de decisão externa — não de código:
@@ -91,6 +93,9 @@ Tudo que falta agora depende de credencial ou de decisão externa — não de c�
    proativa aprovados pela Meta.
 3. **Gateway de pagamento**: a estrutura de planos e quotas está pronta; falta
    plugar o provedor e ligar `FEATURE_BILLING`.
-4. **Revisão jurídica** de LGPD e do fluxo para menores antes do go-live.
+4. **Revisão jurídica** das minutas de termos e política, e do fluxo para
+   menores, antes do go-live — mais o nome do encarregado (DPO) e o CNPJ do
+   controlador, que hoje entram por variável de ambiente. Detalhes na seção
+   "O que ainda depende de decisão de negócio" de [`LGPD.md`](LGPD.md).
 5. **Fila externa** (Redis/Celery) no lugar das threads, quando o volume pedir —
    a fronteira já está desenhada em `jobs/`.

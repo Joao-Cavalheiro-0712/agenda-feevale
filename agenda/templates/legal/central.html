@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon %}
+{% block title %}Privacidade · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.profile') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.95rem">Privacidade</strong>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <p class="label kicker">Seus dados</p>
+  <h2 class="h-page">Tudo que a gente <span class="grifo-sob">sabe de você</span></h2>
+  <p class="sub">E o que você pode fazer com isso agora, sem pedir para ninguém.</p>
+</div>
+
+<section class="section">
+  <header><h3>Interpretação automática</h3></header>
+  <div class="card">
+    <p class="tiny muted" style="margin:0 0 var(--s3)">
+      {% if ia_ligada %}
+        Está <strong>ligada</strong>: o conteúdo que você envia pode ser lido por um provedor
+        externo para virar compromisso. Sem identificadores da sua conta.
+      {% else %}
+        Está <strong>desligada</strong>: nada do que você envia sai daqui para leitura automática.
+        A agenda continua funcionando no cadastro manual.
+      {% endif %}
+    </p>
+    <form method="post" action="{{ url_for('pages.privacy_toggle_ai') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% if ia_ligada %}
+        <button class="btn ghost block" type="submit">Desligar interpretação automática</button>
+      {% else %}
+        <input type="hidden" name="enabled" value="on">
+        <button class="btn block" type="submit">Ligar interpretação automática</button>
+      {% endif %}
+    </form>
+  </div>
+</section>
+
+<section class="section">
+  <header><h3>Seus direitos, agora</h3></header>
+  <div class="stack g4">
+    <a class="btn ghost block" href="{{ url_for('api.export_data') }}" download>Exportar tudo (JSON)</a>
+    <a class="btn ghost block" href="{{ url_for('pages.security_page') }}">Excluir conta e dispositivos</a>
+    <a class="btn ghost block" href="{{ url_for('pages.privacy_page') }}">Ler a política de privacidade</a>
+    <a class="btn ghost block" href="{{ url_for('pages.terms_page') }}">Ler os termos de uso</a>
+  </div>
+  <p class="tiny muted" style="margin-top:var(--s4)">
+    Para correção, oposição ou qualquer outro pedido do art. 18: {{ contato }} — resposta em até 15 dias.
+    Encarregado de dados: {{ encarregado }}.
+  </p>
+</section>
+
+{% if current_user.is_minor %}
+<section class="section">
+  <header><h3>Conta de estudante menor</h3></header>
+  <div class="card">
+    <p class="tiny muted" style="margin:0">
+      Esta conta foi autorizada por um responsável
+      {% if responsaveis %}({{ responsaveis|map(attribute='name')|select|join(', ') }}){% endif %}.
+      Automação silenciosa fica desligada, não há publicidade e não fazemos perfilamento.
+    </p>
+  </div>
+</section>
+{% endif %}
+
+<section class="section">
+  <header><h3>Para que usamos cada dado</h3></header>
+  <div class="tabela-wrap">
+    <table class="tabela">
+      <thead><tr><th>Para quê</th><th>Quais dados</th><th>Base legal</th><th>Por quanto tempo</th></tr></thead>
+      <tbody>
+        {% for linha in tratamento %}
+          <tr><td>{{ linha.finalidade }}</td><td>{{ linha.dados }}</td><td>{{ linha.base_legal }}</td><td>{{ linha.retencao }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <header><h3>Com quem compartilhamos</h3></header>
+  <div class="tabela-wrap">
+    <table class="tabela">
+      <thead><tr><th>Quem</th><th>Para quê</th><th>Onde</th><th>O que recebe</th></tr></thead>
+      <tbody>
+        {% for linha in subprocessadores %}
+          <tr><td>{{ linha.nome }}</td><td>{{ linha.papel }}</td><td>{{ linha.pais }}</td><td>{{ linha.dados }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <header><h3>Histórico de consentimentos</h3><span class="count num">{{ historico|length }}</span></header>
+  {% for registro in historico %}
+    <div class="item">
+      <span class="rail" style="background:{{ 'var(--grifo)' if registro.granted else 'var(--rule-strong)' }}"></span>
+      <span class="time empty num" style="font-size:.72rem">{{ registro.created_at.strftime('%d/%m/%y') }}</span>
+      <span class="body">
+        <span class="title">{{ rotulos.get(registro.kind, registro.kind) }}</span>
+        <span class="meta">
+          <span class="tag {{ 'feito' if registro.granted else '' }}">{{ 'aceito' if registro.granted else 'revogado' }}</span>
+          <span>versão {{ registro.version }}</span>
+          {% if registro.origin != 'web' %}<span>via {{ registro.origin }}</span>{% endif %}
+          {% if registro.guardian_name %}<span>por {{ registro.guardian_name }} ({{ registro.guardian_relationship }})</span>{% endif %}
+        </span>
+      </span>
+      <span></span>
+    </div>
+  {% else %}
+    <p class="tiny muted">Nenhum registro ainda.</p>
+  {% endfor %}
+  <p class="tiny muted" style="margin-top:var(--s4)">
+    Guardamos a versão do documento, a data, a origem e um código embaralhado do seu IP —
+    nunca o IP em claro. É o que a lei exige de nós como prova do seu consentimento.
+  </p>
+</section>
+{% endblock %}

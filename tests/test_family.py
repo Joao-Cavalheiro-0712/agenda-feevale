@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from agenda.core import billing, family
+from agenda.core import billing, family, privacy
 from agenda.models import PlanTier, User
 from agenda.security import hash_password
 
@@ -15,8 +15,11 @@ def responsavel(db):
         email="ana@example.com",
         password_hash=hash_password("outrasenha123"),
         onboarding_done=True,
+        birth_year=1985,
     )
     db.add(pessoa)
+    db.flush()
+    privacy.accept_documents(db, pessoa, ip="127.0.0.1", user_agent="pytest")
     db.commit()
     return pessoa
 

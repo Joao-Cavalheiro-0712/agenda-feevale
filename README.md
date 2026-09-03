@@ -158,6 +158,21 @@ allowlist contra SSRF e separação explícita entre dado e instrução nos prom
 
 Detalhes e como verificar: [`docs/SEGURANCA.md`](docs/SEGURANCA.md).
 
+## Privacidade e LGPD
+
+Termos de uso e política de privacidade versionados em código, com o hash do
+texto gravado junto de cada aceite — a prova que o art. 8º §1º exige. Uma trava
+`fail-closed` no `before_request` impede o uso do produto enquanto houver
+pendência de consentimento, inclusive pelo WhatsApp.
+
+**Menor de 18 anos não cria conta sozinho.** A conta é criada pelo responsável,
+autenticado, que autoriza em tela destacada (art. 14). O estudante entra com o
+login dele, no celular dele; o responsável acompanha do dele, pelo vínculo de
+família. Para menores, automação e interpretação automática começam desligadas.
+
+O que está implementado e o que ainda depende de decisão de negócio (DPO, CNPJ,
+revisão jurídica das minutas): [`docs/LGPD.md`](docs/LGPD.md).
+
 ## Como está organizado
 
 ```
@@ -172,8 +187,8 @@ agenda/
   jobs/       workers: lembretes, reconciliação, retenção de mídia
   web/        páginas, API JSON, webhooks e tempo real (SSE)
 migrations/   Alembic — schema versionado
-docs/         ARQUITETURA.md, SEGURANCA.md e COBERTURA-SPEC.md
-tests/        229 testes + golden dataset versionado
+docs/         ARQUITETURA.md, SEGURANCA.md, LGPD.md e COBERTURA-SPEC.md
+tests/        250 testes + golden dataset versionado
 ```
 
 Duas regras guiam tudo:

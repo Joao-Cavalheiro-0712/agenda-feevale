@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
+{% block title %}Aceite · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><span class="wordmark">{{ mark() }}{{ APP_NAME }}</span></div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead" style="padding-top:var(--s6)">
+  <p class="label kicker">Um minuto só</p>
+  <h2 class="h-page">Precisamos do seu <span class="grifo-sob">aceite</span></h2>
+  <p class="sub">Atualizamos os documentos. Enquanto você não aceitar a versão nova, o app fica parado — é assim que a gente prova que combinou com você, e não com uma versão antiga.</p>
+</div>
+
+<form method="post" style="max-width:420px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  {% if precisa_idade %}
+    <label class="field">
+      <span>Ano de nascimento</span>
+      <input type="text" name="birth_year" required inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="2004" autofocus>
+      <span class="help">Só o ano. Serve para saber se a conta precisa de um responsável.</span>
+    </label>
+  {% endif %}
+
+  <div class="card">
+    <label class="consent">
+      <input type="checkbox" name="accept_terms" value="on" required>
+      <span class="tiny">Li e aceito os
+        <a class="link" href="{{ url_for('pages.terms_page') }}" target="_blank" rel="noopener">Termos de uso</a> (versão {{ terms_version }})
+        e a <a class="link" href="{{ url_for('pages.privacy_page') }}" target="_blank" rel="noopener">Política de privacidade</a> (versão {{ privacy_version }}).</span>
+    </label>
+    <hr class="divider" style="margin:var(--s3) 0">
+    <label class="consent">
+      <input type="checkbox" name="ai_processing" value="on" {{ 'checked' if current_user.ai_processing_enabled }}>
+      <span class="tiny">Autorizo a leitura automática do conteúdo que eu enviar, para montar minha agenda. Sem isso o app segue funcionando no modo manual.</span>
+    </label>
+  </div>
+
+  <button class="btn marca block" style="margin-top:var(--s4)" type="submit">Aceitar e continuar</button>
+  <p class="help">Não quer aceitar? Você pode <a class="link" href="{{ url_for('api.export_data') }}" download>exportar seus dados</a> e encerrar a conta.</p>
+</form>
+{% endblock %}

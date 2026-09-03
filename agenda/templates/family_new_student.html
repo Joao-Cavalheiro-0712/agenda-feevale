@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon %}
+{% block title %}Criar conta de estudante · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.family_page') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.95rem">Conta de estudante</strong>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <p class="label kicker">Responsável</p>
+  <h2 class="h-page">Criar a conta do <span class="grifo-sob">seu filho</span></h2>
+  <p class="sub">
+    Ele entra no celular dele, com a agenda dele. Você acompanha do seu, com as permissões
+    que vocês combinarem. A conta é dele; a autorização é sua.
+  </p>
+</div>
+
+{% if not pode %}
+  <section class="section">
+    <div class="card">
+      <p class="tiny muted" style="margin:0 0 var(--s3)">{{ motivo }}</p>
+      <a class="btn marca block" href="{{ url_for('pages.plans_page') }}">Ver planos</a>
+    </div>
+  </section>
+{% else %}
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <section class="section">
+    <header><h3>Dados do estudante</h3></header>
+    <div class="card">
+      <label class="field"><span>Nome</span><input type="text" name="name" value="{{ dados.get('name', '') }}" required autofocus></label>
+      <div class="row">
+        <label class="field">
+          <span>Ano de nascimento</span>
+          <input type="text" name="birth_year" value="{{ dados.get('birth_year', '') }}" required inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="2013">
+        </label>
+        <label class="field">
+          <span>Você é</span>
+          <input type="text" name="relationship" value="{{ dados.get('relationship', 'mãe') }}" placeholder="mãe, pai, avó, tutor" maxlength="40">
+        </label>
+      </div>
+      <label class="field">
+        <span>E-mail que ele vai usar para entrar</span>
+        <input type="email" name="email" value="{{ dados.get('email', '') }}" required autocomplete="off">
+        <span class="help">Pode ser o e-mail da escola ou um seu. É por ele que o estudante faz login.</span>
+      </label>
+      <label class="field">
+        <span>Senha inicial</span>
+        <input type="password" name="password" required minlength="10" autocomplete="new-password">
+        <span class="help">Mínimo de 10 caracteres. Entregue para ele — e ele pode trocar depois no próprio app.</span>
+      </label>
+    </div>
+  </section>
+
+  <section class="section">
+    <header><h3>Sua autorização</h3></header>
+    <div class="card">
+      <p class="tiny muted" style="margin:0 0 var(--s3)">
+        A lei exige consentimento específico e destacado de um dos pais ou do responsável legal
+        para tratar dados de menores (LGPD, art. 14). Guardamos este registro com seu nome,
+        seu e-mail, a data e a versão dos documentos.
+      </p>
+      <label class="consent">
+        <input type="checkbox" name="guardian_consent" value="on" required>
+        <span class="tiny">
+          Declaro que sou pai, mãe ou responsável legal por este estudante, que li os
+          <a class="link" href="{{ url_for('pages.terms_page') }}" target="_blank" rel="noopener">Termos de uso</a>
+          e a <a class="link" href="{{ url_for('pages.privacy_page') }}" target="_blank" rel="noopener">Política de privacidade</a>,
+          e que autorizo o uso do {{ APP_NAME }} e o tratamento dos dados dele para organizar a agenda escolar.
+        </span>
+      </label>
+      <hr class="divider" style="margin:var(--s3) 0">
+      <label class="consent">
+        <input type="checkbox" name="ai_processing" value="on">
+        <span class="tiny">
+          Autorizo também a leitura automática do que ele enviar (foto do quadro, áudio, arquivo)
+          para virar compromisso. <strong>Fica desligado se você não marcar</strong> — para menores,
+          o padrão é o mais protetivo.
+        </span>
+      </label>
+    </div>
+  </section>
+
+  <button class="btn marca block" type="submit">Criar conta e autorizar</button>
+  <p class="help">
+    Você pode revisar, corrigir ou pedir a exclusão dos dados dele a qualquer momento,
+    pelo vínculo em Família ou escrevendo para {{ privacy_email }}.
+  </p>
+</form>
+{% endif %}
+{% endblock %}

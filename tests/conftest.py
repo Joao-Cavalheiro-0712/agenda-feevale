@@ -17,6 +17,7 @@ os.environ.setdefault("APP_ENV", "development")
 
 from agenda import create_app  # noqa: E402
 from agenda.db import Base, SessionLocal, engine  # noqa: E402
+from agenda.core import privacy  # noqa: E402
 from agenda.models import EducationContext, User  # noqa: E402
 from agenda.security import _hits, hash_password  # noqa: E402
 
@@ -52,9 +53,14 @@ def user(db):
         password_hash=hash_password("segredo123"),
         timezone="America/Sao_Paulo",
         onboarding_done=True,
+        birth_year=2000,
     )
     db.add(person)
     db.flush()
+    # Conta adulta com aceite vigente: é o estado normal de quem passou pelo
+    # cadastro. Sem isto o app trava na tela de aceite, e é justamente isso
+    # que `test_privacidade.py` verifica.
+    privacy.accept_documents(db, person, ip="127.0.0.1", user_agent="pytest")
     context = EducationContext(
         user_id=person.id,
         type="UNDERGRAD",

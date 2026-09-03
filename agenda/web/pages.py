@@ -30,6 +30,7 @@ from agenda.core import (
     notifications,
     periods,
     planner,
+    privacy,
     profiles,
     scope,
     sessions,
@@ -57,8 +58,9 @@ from agenda.models import (
     User,
     UserPhone,
 )
-from agenda.security import share_code
+from agenda.security import password_problems, share_code
 from agenda.web.deps import (
+    _client_ip,
     admin_required,
     current_user,
     db,
@@ -785,6 +787,141 @@ def security_page():
 
 
 # --------------------------------------------------------------------------- #
+# Documentos legais e privacidade (LGPD)
+# --------------------------------------------------------------------------- #
+def _legal(secoes, *, titulo, titulo_marcado, versao, resumo):
+    from agenda.legal import documents
+
+    return render_template(
+        "legal/documento.html",
+        secoes=secoes,
+        titulo=titulo,
+        titulo_marcado=titulo_marcado,
+        versao=versao,
+        resumo=resumo,
+        tratamento=privacy.TREATMENT_RECORD,
+        subprocessadores=privacy.SUBPROCESSORS,
+        contato=config.PRIVACY_EMAIL,
+        documentos=documents,
+    )
+
+
+@bp.route("/termos")
+def terms_page():
+    from agenda.legal import documents
+
+    return _legal(
+        documents.TERMS_SECTIONS,
+        titulo="Termos de uso",
+        titulo_marcado='O combinado, em <span class="grifo-sob">português</span>',
+        versao=privacy.TERMS_VERSION,
+        resumo="Sem letra miúda: o que o serviço faz, o que é seu e o que a gente promete.",
+    )
+
+
+@bp.route("/privacidade")
+def privacy_page():
+    from agenda.legal import documents
+
+    return _legal(
+        documents.PRIVACY_SECTIONS,
+        titulo="Política de privacidade",
+        titulo_marcado='Seus dados, <span class="grifo-sob">explicados</span>',
+        versao=privacy.PRIVACY_VERSION,
+        resumo="Que dados tratamos, por quê, com quem compartilhamos e como você tira tudo daqui.",
+    )
+
+
+@bp.route("/aceite", methods=["GET", "POST"])
+@login_required
+def accept_documents_page():
+    """Novo aceite quando a versão dos documentos muda — ou quando falta.
+
+    Também é onde uma conta antiga, criada antes da checagem de idade, informa
+    o ano de nascimento. Se a resposta indicar menor de idade, a conta não
+    segue: o caminho passa a ser o responsável.
+    """
+    user = current_user()
+    if privacy.documents_up_to_date(user) and request.method == "GET":
+        return redirect(url_for("pages.today"))
+
+    if request.method == "POST":
+        ano = (request.form.get("birth_year") or "").strip()
+        birth_year = int(ano) if ano.isdigit() and len(ano) == 4 else user.birth_year
+        if not request.form.get("accept_terms"):
+            flash("Para continuar é preciso aceitar os documentos.", "error")
+            return redirect(url_for("pages.accept_documents_page"))
+        if birth_year is None:
+            flash("Informe o ano em que você nasceu.", "error")
+            return redirect(url_for("pages.accept_documents_page"))
+        user.birth_year = birth_year
+        if not privacy.is_adult(birth_year) and not user.is_minor:
+            # Conta adulta que se revelou de menor: trava e explica o caminho.
+            user.is_minor = True
+            db().flush()
+            return render_template("legal/precisa_responsavel.html", user=user), 200
+        privacy.accept_documents(
+            db(), user,
+            ip=_client_ip(),
+            user_agent=request.headers.get("User-Agent", ""),
+            ai_processing=request.form.get("ai_processing") in ("on", "1", "true"),
+        )
+        flash("Obrigado. Registro do aceite guardado.", "success")
+        return redirect(url_for("pages.today"))
+
+    return render_template(
+        "legal/aceite.html",
+        precisa_idade=user.birth_year is None,
+        terms_version=privacy.TERMS_VERSION,
+        privacy_version=privacy.PRIVACY_VERSION,
+    )
+
+
+@bp.route("/conta/privacidade")
+@login_required
+def privacy_center():
+    """Central de privacidade: o que tratamos, o que você já consentiu, o que dá para desligar."""
+    user = current_user()
+    rotulos = {
+        "TERMS": "Termos de uso",
+        "PRIVACY": "Política de privacidade",
+        "GUARDIAN_MINOR": "Consentimento do responsável",
+        "AI_PROCESSING": "Interpretação automática",
+        "MARKETING": "Comunicações opcionais",
+    }
+    return render_template(
+        "legal/central.html",
+        historico=privacy.history(db(), user),
+        rotulos=rotulos,
+        tratamento=privacy.TREATMENT_RECORD,
+        subprocessadores=privacy.SUBPROCESSORS,
+        contato=config.PRIVACY_EMAIL,
+        encarregado=config.DPO_NAME,
+        ia_ligada=user.ai_processing_enabled,
+        responsaveis=[
+            db().get(User, link.guardian_id)
+            for link in family.guardians_of(db(), user)
+            if link.guardian_id
+        ],
+        **_shell(active="profile"),
+    )
+
+
+@bp.post("/conta/privacidade/ia")
+@login_required
+def privacy_toggle_ai():
+    user = current_user()
+    ligar = request.form.get("enabled") in ("on", "1", "true")
+    privacy.set_ai_processing(db(), user, enabled=ligar, ip=_client_ip())
+    flash(
+        "Interpretação automática ligada." if ligar else
+        "Desliguei. Nada mais é enviado para leitura automática — o cadastro manual continua.",
+        "success",
+    )
+    return redirect(url_for("pages.privacy_center"))
+
+
+# --------------------------------------------------------------------------- #
 # Planos (SPEC §96)
 # --------------------------------------------------------------------------- #
 @bp.route("/planos")
@@ -856,6 +993,88 @@ def family_page():
             for link in family.guardians_of(db(), user)
         ],
         pode_usar=billing.allows(db(), user, billing.CAN_USE_FAMILY),
+        **_shell(active="profile"),
+    )
+
+
+@bp.route("/familia/novo-estudante", methods=["GET", "POST"])
+@login_required
+def family_new_student():
+    """Responsável cria a conta do filho menor e consente por ele (art. 14).
+
+    O consentimento aqui vale mais que um checkbox anônimo: quem autoriza está
+    autenticado, o registro guarda nome, e-mail, vínculo declarado, versão do
+    documento, hash do texto, IP embaralhado e agente. É a prova que o art. 8º
+    §1º exige do controlador.
+    """
+    user = current_user()
+    if user.is_minor:
+        abort(404)  # menor não cria conta para ninguém
+    pode, motivo = family.can_create_student(db(), user)
+
+    if request.method == "POST":
+        if not pode:
+            flash(motivo, "error")
+            return redirect(url_for("pages.plans_page"))
+
+        nome = (request.form.get("name") or "").strip()[:160]
+        email = (request.form.get("email") or "").strip().lower()[:200]
+        senha = request.form.get("password") or ""
+        ano = (request.form.get("birth_year") or "").strip()
+        parentesco = (request.form.get("relationship") or "responsável").strip()[:40]
+        declarou = request.form.get("guardian_consent") in ("on", "1", "true")
+
+        birth_year = int(ano) if ano.isdigit() and len(ano) == 4 else None
+        problema = password_problems(senha)
+        if not nome:
+            problema = "Diga o nome do estudante."
+        elif not email or "@" not in email or " " in email:
+            problema = "Informe um e-mail válido para o estudante entrar."
+        elif birth_year is None or not (1900 <= birth_year <= dt.date.today().year):
+            problema = "Informe o ano de nascimento do estudante."
+        elif not declarou:
+            problema = "É preciso declarar que você é o responsável e autorizar o uso."
+        elif db().query(User).filter(User.email == email).first() is not None:
+            problema = "Já existe uma conta com esse e-mail."
+        if problema:
+            flash(problema, "error")
+            return render_template(
+                "family_new_student.html", pode=pode, motivo=motivo,
+                dados=request.form, **_shell(active="profile"),
+            )
+
+        estudante = family.create_student_account(
+            db(), user,
+            name=nome, email=email, password=senha,
+            birth_year=birth_year, relationship_label=parentesco,
+        )
+        # O responsável aceita os documentos em nome do menor e registra o
+        # consentimento específico do art. 14 — em duas linhas separadas,
+        # porque são consentimentos distintos.
+        privacy.accept_documents(
+            db(), estudante,
+            ip=_client_ip(),
+            user_agent=request.headers.get("User-Agent", ""),
+            origin="guardian",
+            ai_processing=request.form.get("ai_processing") in ("on", "1", "true"),
+        )
+        privacy.register_guardian_consent(
+            db(), estudante,
+            guardian_name=user.name or "",
+            guardian_email=user.email or "",
+            relationship=parentesco,
+            ip=_client_ip(),
+            user_agent=request.headers.get("User-Agent", ""),
+        )
+        flash(
+            f"Conta de {estudante.name} criada. Entregue o e-mail e a senha para "
+            "ele entrar no celular dele.",
+            "success",
+        )
+        return redirect(url_for("pages.family_page"))
+
+    return render_template(
+        "family_new_student.html", pode=pode, motivo=motivo, dados={},
         **_shell(active="profile"),
     )
 

@@ -164,6 +164,19 @@ class User(Base):
     auto_create_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     reminder_days: Mapped[str] = mapped_column(String(60), default="7,1")
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Idade só é coletada quando há finalidade jurídica clara (SPEC §81):
+    # decidir se o tratamento precisa de consentimento de responsável (art. 14).
+    birth_year: Mapped[int | None] = mapped_column(Integer)
+    is_minor: Mapped[bool] = mapped_column(Boolean, default=False)
+    guardian_consent_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    # Versão dos documentos que o titular aceitou. Guardar aqui (além do
+    # ConsentRecord) deixa a checagem de re-aceite ser uma comparação de coluna,
+    # sem uma consulta extra a cada requisição.
+    accepted_terms_version: Mapped[str] = mapped_column(String(20), default="")
+    accepted_privacy_version: Mapped[str] = mapped_column(String(20), default="")
+    # Consentimento para enviar conteúdo a provedor de interpretação automática.
+    # Revogável: sem ele o app continua funcionando com heurística local.
+    ai_processing_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -862,3 +875,46 @@ class StudyBlock(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     subject: Mapped[Subject | None] = relationship()
+
+
+# --------------------------------------------------------------------------- #
+# Consentimento e privacidade (LGPD art. 8º §1º, art. 14, art. 37)
+# --------------------------------------------------------------------------- #
+class ConsentKind(str, enum.Enum):
+    """Cada finalidade tem seu consentimento — nada de aceite genérico."""
+
+    TERMS = "TERMS"                    # termos de uso
+    PRIVACY = "PRIVACY"                # política de privacidade
+    GUARDIAN_MINOR = "GUARDIAN_MINOR"  # responsável autorizando dados de menor
+    AI_PROCESSING = "AI_PROCESSING"    # envio de conteúdo a provedor de IA
+    MARKETING = "MARKETING"            # comunicações não essenciais
+
+
+class ConsentRecord(Base):
+    """Prova de consentimento.
+
+    O ônus de provar que o titular consentiu é do controlador (art. 8º §1º).
+    Guardamos quem, quando, qual versão do texto, de qual origem e — quando é
+    um responsável consentindo por um menor — quem declarou ser o responsável.
+    Revogação não apaga a linha: cria o registro da revogação, porque o
+    histórico é a prova.
+    """
+
+    __tablename__ = "consent_records"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(30), index=True)
+    version: Mapped[str] = mapped_column(String(20))
+    granted: Mapped[bool] = mapped_column(Boolean, default=True)
+    document_hash: Mapped[str] = mapped_column(String(64), default="")
+    ip_hash: Mapped[str] = mapped_column(String(64), default="")
+    user_agent: Mapped[str] = mapped_column(String(300), default="")
+    origin: Mapped[str] = mapped_column(String(20), default="web")
+    # Consentimento de responsável por menor (art. 14 §1º).
+    guardian_name: Mapped[str] = mapped_column(String(160), default="")
+    guardian_email: Mapped[str] = mapped_column(String(200), default="")
+    guardian_relationship: Mapped[str] = mapped_column(String(40), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )

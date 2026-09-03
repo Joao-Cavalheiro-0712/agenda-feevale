@@ -18,7 +18,12 @@ from sqlalchemy.orm import Session
 from agenda.core import billing
 from agenda.core.events import log
 from agenda.models import GuardianLink, User
-from agenda.security import share_code
+from agenda.security import hash_password, share_code
+
+# Criar a conta de um filho menor é o único caminho legal para esse público
+# (art. 14 da LGPD + capacidade civil). Por isso o primeiro estudante nunca é
+# barrado por plano: o que é obrigação legal não pode virar upsell.
+MINOR_ACCOUNT_FLOOR = 1
 
 
 def invite(
@@ -156,3 +161,72 @@ def related_users(db: Session, user: User) -> list[GuardianLink]:
             )
         ).all()
     )
+
+
+# --------------------------------------------------------------------------- #
+# Conta criada pelo responsável (menores de idade)
+# --------------------------------------------------------------------------- #
+def can_create_student(db: Session, guardian: User) -> tuple[bool, str]:
+    """Se este responsável ainda pode criar/adicionar um estudante."""
+    atuais = len(students_of(db, guardian))
+    limite = billing.limit_of(db, guardian, billing.MAX_STUDENTS)
+    if limite == billing.UNLIMITED:
+        return True, ""
+    permitido = max(limite, MINOR_ACCOUNT_FLOOR)
+    if atuais >= permitido:
+        return False, (
+            "Você já tem o número de estudantes do seu plano. "
+            "O plano Família permite até 5."
+        )
+    return True, ""
+
+
+def create_student_account(
+    db: Session,
+    guardian: User,
+    *,
+    name: str,
+    email: str,
+    password: str,
+    birth_year: int | None,
+    relationship_label: str = "responsável",
+) -> User:
+    """Cria a conta do estudante menor, já vinculada ao responsável.
+
+    O estudante recebe login próprio — ele usa o app no celular dele, com a
+    experiência dele. O responsável não entra "dentro" da conta: ele enxerga
+    pelo vínculo, com as permissões do vínculo, exatamente como qualquer outro
+    responsável. A diferença é a origem do consentimento: aqui quem autorizou
+    está autenticado, o que é a melhor prova possível para o art. 14.
+    """
+    student = User(
+        name=name.strip()[:160],
+        email=email.strip().lower()[:200],
+        password_hash=hash_password(password),
+        timezone=guardian.timezone,
+        birth_year=birth_year,
+        is_minor=True,
+        guardian_consent_at=dt.datetime.now(dt.timezone.utc),
+        # Menor de idade começa sem automação silenciosa e sem IA opcional
+        # ligada por padrão: o melhor interesse da criança pede o contrário
+        # do padrão adulto (SPEC §80, LGPD art. 14 §1º).
+        auto_create_enabled=False,
+    )
+    db.add(student)
+    db.flush()
+
+    link = GuardianLink(
+        guardian_id=guardian.id,
+        student_id=student.id,
+        invite_code=share_code(),
+        invite_email=(guardian.email or "")[:200],
+        relationship_label=relationship_label[:40],
+        status="ACTIVE",
+        accepted_at=dt.datetime.now(dt.timezone.utc),
+    )
+    db.add(link)
+    db.flush()
+    log(db, user_id=guardian.id, actor="user", action="CREATE_STUDENT_ACCOUNT",
+        object_type="user", object_id=student.id,
+        after={"link_id": link.id, "relationship": link.relationship_label})
+    return student

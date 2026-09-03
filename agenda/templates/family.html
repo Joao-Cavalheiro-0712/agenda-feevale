@@ -38,6 +38,17 @@
 {% endif %}
 
 <section class="section">
+  <header><h3>Criar a conta de um filho</h3></header>
+  <div class="card">
+    <p class="tiny muted" style="margin:0 0 var(--s3)">
+      Menor de 18 anos não abre conta sozinho. Você cria, autoriza e entrega o login:
+      o app fica no celular dele, e você acompanha do seu.
+    </p>
+    <a class="btn marca block" href="{{ url_for('pages.family_new_student') }}">Criar conta de estudante</a>
+  </div>
+</section>
+
+<section class="section">
   <header><h3>Convidar um responsável</h3></header>
   {% if pode_usar %}
     <form method="post" action="{{ url_for('pages.family_invite') }}" class="card">

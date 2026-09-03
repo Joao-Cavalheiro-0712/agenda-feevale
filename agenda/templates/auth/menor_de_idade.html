@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
+{% block title %}Peça para um responsável · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><a class="wordmark" href="{{ url_for('pages.home') }}">{{ mark() }}{{ APP_NAME }}</a></div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead" style="padding-top:var(--s6)">
+  <p class="label kicker">Quase lá</p>
+  <h2 class="h-page">Sua conta precisa ser criada por um <span class="grifo-sob">responsável</span></h2>
+  <p class="sub">
+    {% if name %}{{ name }}, a{% else %}A{% endif %} lei brasileira não deixa quem tem menos de 18 anos
+    aceitar os termos sozinho. Mas o {{ APP_NAME }} foi feito para você também — o caminho é só um pouquinho diferente.
+  </p>
+</div>
+
+<section class="section">
+  <header><h3>Como funciona</h3></header>
+  <ol class="passos">
+    <li><strong>Seu pai, sua mãe ou seu responsável cria a conta dele</strong> aqui no {{ APP_NAME }}.</li>
+    <li>Na conta dele, ele vai em <strong>Família → Criar conta de estudante</strong> e autoriza o uso do app por você.</li>
+    <li>Ele escolhe seu e-mail e uma senha e te entrega. <strong>O app é seu</strong>: você entra no seu celular, com a sua agenda e a sua cara.</li>
+    <li>No celular dele, ele acompanha o que você deixar visível — e você pode ajustar isso quando quiser.</li>
+  </ol>
+</section>
+
+<div class="stack g4" style="max-width:380px">
+  <a class="btn marca block" href="{{ url_for('auth.register') }}">Meu responsável vai criar a conta</a>
+  <a class="btn ghost block" href="{{ url_for('auth.login') }}">Já tenho conta, quero entrar</a>
+</div>
+
+<p class="tiny muted" style="margin-top:var(--s5);max-width:46ch">
+  Não guardamos nada do que você preencheu nesta tentativa. Dúvidas de privacidade:
+  {{ privacy_email }}.
+</p>
+{% endblock %}

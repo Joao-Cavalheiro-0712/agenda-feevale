@@ -14,18 +14,40 @@
   <label class="field"><span>Como te chamo</span><input type="text" name="name" value="{{ name|default('') }}" autocomplete="given-name" autofocus></label>
   <label class="field"><span>E-mail</span><input type="email" name="email" value="{{ email|default('') }}" required autocomplete="email"></label>
   <label class="field">
+    <span>Ano de nascimento</span>
+    <input type="text" name="birth_year" value="{{ birth_year|default('') }}" required inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="2004" autocomplete="bday-year">
+    <span class="help">Precisamos saber só o ano. Menores de 18 usam o {{ APP_NAME }} por uma conta criada pelo responsável.</span>
+  </label>
+  <label class="field">
     <span>Celular</span>
     <input type="tel" name="phone" placeholder="(51) 99999-8888" autocomplete="tel">
     <span class="help">Só para conectar o WhatsApp depois. Pode deixar em branco.</span>
   </label>
   <label class="field">
     <span>Senha</span>
-    <input type="password" name="password" required minlength="8" autocomplete="new-password">
-    <span class="help">Pelo menos 8 caracteres.</span>
+    <input type="password" name="password" required minlength="10" autocomplete="new-password">
+    <span class="help">Pelo menos 10 caracteres, com letras e números.</span>
   </label>
+
+  <div class="card" style="margin:var(--s4) 0">
+    <label class="consent">
+      <input type="checkbox" name="accept_terms" value="on" required>
+      <span class="tiny">Tenho 18 anos ou mais e aceito os
+        <a class="link" href="{{ url_for('pages.terms_page') }}" target="_blank" rel="noopener">Termos de uso</a>
+        e a <a class="link" href="{{ url_for('pages.privacy_page') }}" target="_blank" rel="noopener">Política de privacidade</a>.</span>
+    </label>
+    <hr class="divider" style="margin:var(--s3) 0">
+    <label class="consent">
+      <input type="checkbox" name="ai_processing" value="on" checked>
+      <span class="tiny">Autorizo que o conteúdo que eu enviar (áudio, foto, documento) seja lido por
+        interpretação automática para montar minha agenda. Dá para desligar depois — sem isso,
+        o cadastro continua funcionando no modo manual.</span>
+    </label>
+  </div>
+
   <input type="hidden" name="timezone" id="tz">
   <button class="btn marca block" type="submit">Criar conta</button>
-  <p class="help">Seus dados servem só para organizar sua agenda acadêmica. Você pode exportar ou apagar tudo quando quiser.</p>
+  <p class="help">Guardamos o registro do seu aceite: qual versão, quando e de onde. Você pode exportar ou apagar tudo quando quiser.</p>
 </form>
 {% endblock %}
 {% block scripts %}

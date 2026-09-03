@@ -18,6 +18,7 @@ from agenda import config
 from agenda.ai import prompts
 from agenda.ai.context import build_context_block
 from agenda.ai.providers import ai_available, get_provider, get_vision_provider, record_usage
+from agenda.core import privacy
 from agenda.core import academic, duplicates, events as events_core, planner
 from agenda.core.dates import parse_explicit_date, resolve_expression
 from agenda.core.text import norm
@@ -225,7 +226,9 @@ def process(db: Session, user: User, document: Document, data: bytes) -> Documen
     vision_pages = [p for p in pages if p.get("needs_vision")]
 
     extracted = None
-    if ai_available():
+    # Sem consentimento de interpretação automática, nada sai daqui: cai na
+    # heurística local, que roda inteiramente no nosso servidor.
+    if ai_available() and privacy.ai_allowed(user):
         if text_blob.strip():
             extracted = _extract_with_ai(db, user, document, text_blob)
         elif vision_pages and text_extract.is_image(document.filename):

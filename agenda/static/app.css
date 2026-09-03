@@ -512,3 +512,41 @@ blockquote.trecho {
   .composer-fixo { bottom: 0; left: 244px; padding-left: var(--s7); padding-right: var(--s7); }
   .composer-fixo .wrap { max-width: 680px; }
 }
+
+/* ---------------------------------------------------------------------------
+   Documentos legais e consentimento
+   Texto jurídico é para ser lido, não para ser tolerado: medida de linha
+   confortável, tabela que rola sozinha no celular e caixa de aceite com área
+   de toque de sobra.
+   --------------------------------------------------------------------------- */
+.consent {
+  display: flex; gap: var(--s3); align-items: flex-start;
+  cursor: pointer; padding: var(--s2) 0; min-height: 44px;
+}
+.consent input[type="checkbox"] {
+  flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px;
+  accent-color: var(--ink); cursor: pointer;
+}
+.consent span { line-height: 1.5; }
+
+.legal { max-width: 62ch; }
+.legal .section header h3 { font-size: .96rem; }
+.legal-p { margin: 0 0 var(--s3); font-size: .93rem; line-height: 1.65; color: var(--ink-2); }
+.legal-ul { margin: 0 0 var(--s3); padding-left: 1.1rem; }
+.legal-ul li { font-size: .93rem; line-height: 1.6; color: var(--ink-2); margin-bottom: var(--s2); }
+
+.passos { margin: 0; padding-left: 1.2rem; counter-reset: passo; }
+.passos li { font-size: .93rem; line-height: 1.6; color: var(--ink-2); margin-bottom: var(--s3); }
+
+.tabela-wrap { overflow-x: auto; margin: 0 0 var(--s4); -webkit-overflow-scrolling: touch; }
+.tabela { width: 100%; min-width: 520px; border-collapse: collapse; font-size: .82rem; }
+.tabela th, .tabela td {
+  text-align: left; padding: var(--s3) var(--s3) var(--s3) 0;
+  border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5;
+}
+.tabela th {
+  font-family: var(--font-ui); font-size: .68rem; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-4); font-weight: 600;
+  border-bottom-color: var(--rule-strong);
+}
+.tabela td { color: var(--ink-2); }

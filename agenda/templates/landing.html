@@ -75,5 +75,7 @@
 
 <p class="tiny muted center" style="margin:var(--s6) 0 var(--s7)">
   {{ APP_NAME }} · seus dados são seus: exporte ou apague quando quiser.
+  <br><a class="link" href="{{ url_for('pages.terms_page') }}">Termos de uso</a>
+  · <a class="link" href="{{ url_for('pages.privacy_page') }}">Política de privacidade</a>
 </p>
 {% endblock %}

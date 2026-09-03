@@ -147,3 +147,11 @@ RATE_LIMITS = {
 }
 
 ADMIN_EMAILS = {e.strip().lower() for e in _env("ADMIN_EMAILS").split(",") if e.strip()}
+
+# --------------------------------------------------------------------------- #
+# Privacidade e contato do titular (LGPD art. 41)
+# --------------------------------------------------------------------------- #
+PRIVACY_EMAIL = _env("PRIVACY_EMAIL", "privacidade@grifo.app")
+DPO_NAME = _env("DPO_NAME", "a definir antes do lançamento comercial")
+COMPANY_NAME = _env("COMPANY_NAME", APP_NAME)
+COMPANY_DOC = _env("COMPANY_DOC", "")  # CNPJ, quando houver

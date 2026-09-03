@@ -13,7 +13,7 @@ import datetime as dt
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
-from agenda.core import login_guard, phone as phone_utils, sessions
+from agenda.core import login_guard, phone as phone_utils, privacy, sessions
 from agenda.core.events import log
 from agenda.models import User
 from agenda.security import dummy_verify, hash_password, password_problems, verify_password
@@ -81,9 +81,25 @@ def login():
     return render_template("auth/login.html")
 
 
+def _parse_birth_year(raw: str | None) -> int | None:
+    texto = (raw or "").strip()
+    if not texto.isdigit() or len(texto) != 4:
+        return None
+    ano = int(texto)
+    atual = dt.date.today().year
+    return ano if 1900 <= ano <= atual else None
+
+
 @bp.route("/criar-conta", methods=["GET", "POST"])
 @limited("register")
 def register():
+    """Cadastro de quem tem 18 anos ou mais.
+
+    Menor de idade não cria conta sozinho: nem para aceitar contrato (Código
+    Civil), nem para consentir com o tratamento dos próprios dados (LGPD
+    art. 14). O caminho dele é a conta criada pelo responsável, que consente
+    autenticado — ver `pages.family_new_student`.
+    """
     if current_user() is not None:
         return redirect(url_for("pages.today"))
 
@@ -92,17 +108,33 @@ def register():
         email = (request.form.get("email") or "").strip().lower()[:200]
         password = request.form.get("password") or ""
         phone = phone_utils.normalize(request.form.get("phone") or "")
+        birth_year = _parse_birth_year(request.form.get("birth_year"))
+        aceitou = request.form.get("accept_terms") in ("on", "1", "true")
 
         problema = password_problems(password)
         if not email or "@" not in email or " " in email:
             problema = "Informe um e-mail válido."
         elif len(email) > 200:
             problema = "E-mail longo demais."
+        elif birth_year is None:
+            problema = "Informe o ano em que você nasceu."
+        elif not privacy.is_adult(birth_year):
+            # Não é "erro do usuário": é o caminho errado. Mandamos para o certo.
+            return render_template(
+                "auth/menor_de_idade.html",
+                name=name,
+                idade=privacy.age_from_year(birth_year),
+            ), 200
+        elif not aceitou:
+            problema = "Para criar a conta é preciso aceitar os termos e a política."
         elif db().query(User).filter(User.email == email).first() is not None:
             problema = "Já existe uma conta com esse e-mail. Tente entrar."
         if problema:
             flash(problema, "error")
-            return render_template("auth/register.html", name=name, email=email)
+            return render_template(
+                "auth/register.html", name=name, email=email,
+                birth_year=request.form.get("birth_year", ""),
+            )
 
         user = User(
             name=name,
@@ -110,11 +142,22 @@ def register():
             password_hash=hash_password(password),
             phone_e164=phone or None,
             timezone=(request.form.get("timezone") or "America/Sao_Paulo").strip()[:64],
+            birth_year=birth_year,
+            is_minor=False,
         )
         db().add(user)
         db().flush()
+        # Prova do aceite: versão, hash do texto, IP embaralhado e agente.
+        privacy.accept_documents(
+            db(), user,
+            ip=_client_ip(),
+            user_agent=request.headers.get("User-Agent", ""),
+            origin="web",
+            ai_processing=request.form.get("ai_processing", "on") in ("on", "1", "true"),
+        )
         log(db(), user_id=user.id, actor="user", action="REGISTER", object_type="user",
-            object_id=user.id, origin="web")
+            object_id=user.id, origin="web",
+            after={"terms": privacy.TERMS_VERSION, "privacy": privacy.PRIVACY_VERSION})
         login_user(user)
         return redirect(url_for("pages.onboarding"))
 

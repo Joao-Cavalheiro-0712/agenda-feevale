@@ -110,6 +110,7 @@ def create_app() -> Flask:
             "csrf_token": session.get("csrf"),
             "nonce": getattr(g, "nonce", ""),
             "version": __version__,
+            "privacy_email": config.PRIVACY_EMAIL,
         }
 
     @app.errorhandler(413)

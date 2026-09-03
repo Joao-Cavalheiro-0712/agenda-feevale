@@ -61,6 +61,7 @@ def test_cadastro_leva_ao_onboarding(app, db):
         data={
             "csrf_token": _csrf(client), "name": "Ana", "email": "ana@example.com",
             "password": "segredo123", "phone": "(51) 99999-1111",
+            "birth_year": "1998", "accept_terms": "on",
         },
     )
     assert response.status_code == 302 and "/onboarding" in response.headers["Location"]
