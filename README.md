@@ -87,9 +87,13 @@ O que ainda está desligado por falta de credencial (e como ligar):
 | IA (áudio, visão, extração) | `GEMINI_API_KEY` | o interpretador heurístico assume; texto continua funcionando |
 | WhatsApp | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `FEATURE_WHATSAPP=true` | o canal fica oculto na interface |
 | Cobrança | gateway + `FEATURE_BILLING=true` | os planos aparecem, mas a troca paga é recusada |
+| E-mail (confirmação, recuperação) | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | o link sai no log do servidor em vez da caixa de entrada; nada quebra |
+| Entrar com Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | o botão simplesmente não aparece |
+| Entrar com Apple | `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | idem |
+| Pix e carteiras | método `pix` habilitado no painel do gateway + domínio registrado para Apple Pay | o botão de Pix devolve recusa do gateway; a carteira não aparece no Safari |
 
-`SECRET_KEY`, `DATABASE_URL` e as chaves VAPID já estão configuradas no ambiente
-de produção.
+`SECRET_KEY`, `DATABASE_URL`, as chaves VAPID, o volume `/data` (uploads e
+backups) e as variáveis de passkey já estão configuradas em produção.
 
 ## Deploy no Railway
 
@@ -263,6 +267,11 @@ Veja `.env.example`. As essenciais:
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push |
 | `TIMEZONE`, `REMINDER_DAYS`, `REMINDER_HOUR` | comportamento dos lembretes |
 | `FEATURE_*` | liga/desliga recursos gradualmente |
+| `SMTP_*` | confirmação de e-mail e recuperação de senha |
+| `GOOGLE_*`, `APPLE_*` | entrar com Google e com Apple |
+| `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN` | chaves de acesso (Face ID, digital) |
+| `STORAGE_DIR`, `BACKUP_DIR` | precisam apontar para **volume persistente**: no disco do contêiner, some a cada deploy |
+| `BACKUP_KEEP_DAILY/WEEKLY/MONTHLY` | escada de retenção dos backups (7/4/6) |
 
 O schema é versionado com Alembic e aplicado no start (`Procfile`). Em produção
 o app **não** cria tabelas sozinho: divergência de schema tem que aparecer, não
