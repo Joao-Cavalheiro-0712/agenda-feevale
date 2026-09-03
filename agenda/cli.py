@@ -47,6 +47,8 @@ def _migrate() -> int:
 
     cfg = Config("alembic.ini")
     usa_postgres = engine.url.get_backend_name().startswith("postgres")
+    if usa_postgres:
+        _ensure_database(engine)
 
     with engine.connect() as conexao:
         if usa_postgres:
@@ -63,6 +65,39 @@ def _migrate() -> int:
                 )
                 conexao.commit()
     return 0
+
+
+def _ensure_database(engine) -> None:
+    """Cria o banco informado na URL, se ele ainda não existir.
+
+    Operação puramente aditiva: se o banco existe, não fazemos nada. Isso deixa
+    o primeiro deploy funcionar sozinho quando o servidor Postgres já está de
+    pé mas o banco da aplicação ainda não foi criado.
+    """
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        with engine.connect():
+            return  # o banco existe e aceita conexão
+    except OperationalError as erro:
+        if "does not exist" not in str(erro):
+            raise
+
+    nome = engine.url.database
+    admin_url = engine.url.set(database="postgres")
+    admin = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    try:
+        with admin.connect() as conexao:
+            existe = conexao.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :nome"), {"nome": nome}
+            ).first()
+            if existe is None:
+                # O nome vem da nossa própria configuração, não do usuário.
+                conexao.execute(text(f'CREATE DATABASE "{nome}"'))
+                print(f"banco {nome} criado.")
+    finally:
+        admin.dispose()
 
 
 def _adopt_baseline(conexao, cfg, inspetor) -> None:
