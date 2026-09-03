@@ -81,6 +81,7 @@ escopo (P1/P2/P3 ou dependente de contrato externo).
 | 139–140 | Materiais e checklists | ✅ | checklist no evento, com extração automática de "levar cartolina e cola" |
 | 141 | Tempo real | ✅ | SSE em `web/realtime.py`: o que chega pelo WhatsApp aparece na aba aberta |
 
+| 70–71 | Compreensão sem depender de IA | ✅ | base própria em `knowledge/`: fonética PT-BR, léxico de 198 termos, memória por usuário e recuperação — resolve local antes de gastar modelo, ver [`CONHECIMENTO.md`](CONHECIMENTO.md) |
 | — | Consentimento e LGPD | ✅ | termos e política versionados, prova de aceite com hash, trava fail-closed, menor de 18 só por conta criada pelo responsável — ver [`LGPD.md`](LGPD.md) |
 
 ## O que ainda depende de terceiros

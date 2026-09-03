@@ -87,7 +87,21 @@ _STOPWORDS_TITLE = {
 
 
 def detect_type(text: str) -> tuple[str, float]:
+    """Tipo da atividade, consultando primeiro a base de conhecimento própria.
+
+    O léxico conhece 200 formas de dizer a mesma coisa — "p1", "sub", "trampo",
+    "lista", "tema" — e ainda tolera erro de escrita pelo som. A tabela local
+    abaixo continua como rede de segurança para os casos que ela já resolvia.
+    """
+    from agenda.knowledge import lexicon
+
+    tipo, _termo, score = lexicon.find_event_type(text)
     t = norm(text)
+    if tipo:
+        if tipo == EventType.CLASS.value and any(h in t for h in MATERIAL_HINTS):
+            return EventType.MATERIAL.value, 0.85
+        return tipo, round(min(0.95, 0.9 * score + 0.05), 2)
+
     for keywords, event_type in TYPE_KEYWORDS:
         for keyword in keywords:
             if keyword in t:

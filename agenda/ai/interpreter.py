@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from agenda import config
 from agenda.ai import heuristics, prompts
-from agenda.ai.context import build_context_block
+from agenda.knowledge.retrieval import build_context_block
 from agenda.ai.providers import ai_available, get_provider, record_usage
 from agenda.core import academic, duplicates, planner, privacy, recurrence
 from agenda.core.actions import ActionProposal, Intent
@@ -42,15 +42,19 @@ def interpret(
 ) -> InterpretResult:
     text = (text or "").strip()
     if not text:
-        return InterpretResult(reply="Não entendi. Pode repetir?")
+        return InterpretResult(reply="Me manda o que você precisa lembrar — pode ser por áudio.")
 
-    result = InterpretResult()
-    # Consentimento revogado (art. 8º §5º) = nada de provedor externo. A
-    # heurística local continua montando a agenda.
-    if ai_available() and privacy.ai_allowed(user):
-        result = _interpret_with_ai(db, user, text, channel=channel)
-    if not result.proposals:
-        result = _interpret_heuristic(db, user, text, channel=channel)
+    # LOCAL PRIMEIRO. A base de conhecimento própria (léxico brasileiro,
+    # fonética e o vocabulário que este usuário já ensinou) resolve a maior
+    # parte das mensagens sozinha. Só o que ela não fecha com confiança é que
+    # vai para o modelo — que é onde está o custo e a latência.
+    result = _interpret_heuristic(db, user, text, channel=channel)
+    if _precisa_de_modelo(result) and ai_available() and privacy.ai_allowed(user):
+        do_modelo = _interpret_with_ai(db, user, text, channel=channel)
+        if do_modelo.proposals and _melhor(do_modelo) >= _melhor(result):
+            local = result
+            result = do_modelo
+            _herdar_aprendizado(local, result)
 
     for proposal in result.proposals:
         proposal.channel = channel
@@ -63,6 +67,39 @@ def interpret(
     return result
 
 
+# Acima disto a interpretação local basta e o modelo não é chamado. É o número
+# que governa o custo de IA do produto: subir demais economiza e erra mais;
+# baixar demais paga por respostas que já tínhamos.
+LOCAL_SUFICIENTE = 0.85
+
+
+def _melhor(resultado: InterpretResult) -> float:
+    return max((p.confidence for p in resultado.proposals), default=0.0)
+
+
+def _precisa_de_modelo(resultado: InterpretResult) -> bool:
+    """Só chama o modelo quando a resolução local não fecha sozinha."""
+    if not resultado.proposals:
+        return True
+    if any(p.question for p in resultado.proposals):
+        return True
+    return _melhor(resultado) < LOCAL_SUFICIENTE
+
+
+def _herdar_aprendizado(local: InterpretResult, escolhido: InterpretResult) -> None:
+    """O que a camada local reconheceu continua valendo como aprendizado.
+
+    Se o modelo assumiu a resposta, os termos que a base local identificou
+    (matéria, tipo) não podem ser jogados fora: eles são o que faz a próxima
+    mensagem parecida não precisar de modelo nenhum.
+    """
+    termos = [t for p in local.proposals for t in p.payload.get("learn_terms", [])]
+    if not termos:
+        return
+    for proposta in escolhido.proposals:
+        proposta.payload.setdefault("learn_terms", termos)
+
+
 # --------------------------------------------------------------------------- #
 # Caminho com LLM
 # --------------------------------------------------------------------------- #
@@ -71,7 +108,9 @@ def _interpret_with_ai(db: Session, user: User, text: str, *, channel: str) -> I
     today = planner.today_of(user)
     prompt = prompts.interpret_prompt(
         message=text,
-        context_block=build_context_block(db, user),
+        # Contexto recuperado pela mensagem, não a conta inteira: o prompt
+        # fica menor e o modelo escolhe entre 6 matérias, não 40.
+        context_block=build_context_block(db, user, text),
         today=today.isoformat(),
         timezone=user.timezone,
     )
@@ -106,11 +145,13 @@ def _proposal_from_ai(db: Session, user: User, raw: dict, *, model: str) -> Acti
     question = str(raw.get("question", "") or "")
     options: list[dict] = []
 
-    subject, subject_question, subject_options = _resolve_subject_reference(
+    subject, subject_question, subject_options, aprendizado = _resolve_subject_reference(
         db, user, payload.get("subject_name", ""), payload.get("teacher_name", "")
     )
     if subject is not None:
         payload["subject_id"] = subject.id
+        if aprendizado:
+            payload["learn_terms"] = aprendizado
     elif subject_question and not question:
         question, options = subject_question, subject_options
         confidence = min(confidence, 0.6)
@@ -151,7 +192,7 @@ def _interpret_heuristic(db: Session, user: User, text: str, *, channel: str) ->
     query_intent = heuristics.is_query(text)
     if query_intent:
         payload: dict = {}
-        subject, _, _ = _resolve_subject_reference(db, user, text, "")
+        subject, _, _, _ = _resolve_subject_reference(db, user, text, "")
         if subject:
             payload["subject_id"] = subject.id
             if query_intent == "GET_NEXT_EVENTS":
@@ -169,7 +210,7 @@ def _interpret_heuristic(db: Session, user: User, text: str, *, channel: str) ->
         return InterpretResult(proposals=_schedule_proposals(db, user, text, shift=shift, channel=channel))
 
     if heuristics.is_completion(text):
-        subject, _, _ = _resolve_subject_reference(db, user, text, "")
+        subject, _, _, _ = _resolve_subject_reference(db, user, text, "")
         event = _find_event_by_text(db, user, text, subject)
         if event is not None:
             return InterpretResult(
@@ -184,7 +225,9 @@ def _interpret_heuristic(db: Session, user: User, text: str, *, channel: str) ->
             )
 
     event_type, type_confidence = heuristics.detect_type(text)
-    subject, subject_question, subject_options = _resolve_subject_reference(db, user, text, text)
+    subject, subject_question, subject_options, aprendizado = _resolve_subject_reference(
+        db, user, text, text
+    )
     expression = heuristics.find_time_expression(text)
     date, ask = _resolve_date_expression(db, user, expression or text, subject)
     start_time, end_time = heuristics.find_times(text, shift=shift)
@@ -216,12 +259,35 @@ def _interpret_heuristic(db: Session, user: User, text: str, *, channel: str) ->
     }
     if subject:
         payload["subject_id"] = subject.id
+        if aprendizado:
+            payload["learn_terms"] = aprendizado
+    # O tipo também é conhecimento: se a pessoa chamou de "trampo", o sistema
+    # aprende que trampo, para ela, é trabalho.
+    if event_type and event_type != EventType.OTHER.value and type_confidence >= 0.9:
+        termo = heuristics_term(text)
+        if termo:
+            payload.setdefault("learn_terms", []).append(
+                {"kind": "EVENT_TYPE", "term": termo, "value": event_type, "source": "confirm"}
+            )
     payload = {k: v for k, v in payload.items() if v not in (None, "")}
+
+    # Nada reconhecido — nem tipo, nem matéria, nem data. Fabricar um evento
+    # aqui seria pior que admitir: viraria uma linha sem sentido na agenda de
+    # alguém. Sem proposta, o assistente responde com exemplos do nível dele.
+    nada_reconhecido = (
+        event_type == EventType.OTHER.value
+        and subject is None
+        and not subject_options
+        and not date
+        and not expression
+    )
+    if nada_reconhecido:
+        return InterpretResult()
 
     question = ""
     options: list[dict] = []
     if not date:
-        question = ask or "Para quando é?"
+        question = ask or _pergunta_de_data(title, subject)
         confidence = min(confidence, 0.5)
     elif subject is None and subject_question:
         question, options = subject_question, subject_options
@@ -247,7 +313,7 @@ def _schedule_proposals(
     """"Tenho Penal segunda e quarta das 19:30 às 21:30" → aulas recorrentes."""
     weekdays = heuristics.find_weekdays(text)
     start_time, end_time = heuristics.find_times(text, shift=shift)
-    subject, _, _ = _resolve_subject_reference(db, user, text, "")
+    subject, _, _, _ = _resolve_subject_reference(db, user, text, "")
     subject_name = subject.display if subject else _guess_subject_name(text)
     room = ""
     room_match = re.search(r"\bsala\s+([\w-]+)", norm(text))
@@ -284,6 +350,28 @@ def _schedule_proposals(
     return proposals
 
 
+def _pergunta_de_data(titulo: str, subject: Subject | None) -> str:
+    """Pergunta a data dizendo o que já foi entendido.
+
+    "Para quando é?" sozinho obriga a pessoa a lembrar o que ela escreveu e a
+    confiar que o sistema entendeu o resto. Repetir o que foi entendido custa
+    uma linha e devolve essa confiança.
+    """
+    if titulo and subject is not None:
+        return f"Anotei “{titulo}” em {subject.display}. Para quando é?"
+    if titulo:
+        return f"Anotei “{titulo}”. Para quando é?"
+    return "Para quando é?"
+
+
+def heuristics_term(text: str) -> str:
+    """Qual palavra da frase levou ao tipo detectado — é ela que vira memória."""
+    from agenda.knowledge import lexicon
+
+    _tipo, termo, _score = lexicon.find_event_type(text)
+    return termo
+
+
 def _guess_subject_name(text: str) -> str:
     match = re.search(r"\b(?:tenho|aula de|de)\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wçãõáéíóú]+)", text)
     return match.group(1) if match else ""
@@ -294,20 +382,29 @@ def _guess_subject_name(text: str) -> str:
 # --------------------------------------------------------------------------- #
 def _resolve_subject_reference(
     db: Session, user: User, subject_text: str, teacher_text: str
-) -> tuple[Subject | None, str, list[dict]]:
-    """Resolve a matéria por nome/apelido e, se preciso, pelo professor (§20)."""
-    context = academic.active_context(db, user.id)
-    context_id = context.id if context else None
+) -> tuple[Subject | None, str, list[dict], list[dict]]:
+    """Resolve a matéria por nome/apelido, som, memória e professor (§20).
+
+    Devolve `(materia, pergunta, opcoes, aprendizado)`. Quando não dá para
+    decidir, a pergunta vem com os candidatos concretos — nunca um "não
+    entendi" seco. O `aprendizado` viaja pelo retorno, e não por estado de
+    módulo: o servidor roda várias threads e dois usuários não podem se
+    misturar.
+    """
+    from agenda.knowledge import resolver as conhecimento
 
     if subject_text:
-        subject, ambiguous = academic.resolve_subject(db, user.id, subject_text, context_id=context_id)
-        if subject:
-            return subject, "", []
-        if ambiguous:
+        resolucao = conhecimento.resolve_subject(db, user, subject_text)
+        if resolucao.resolved:
+            return resolucao.subject, "", [], resolucao.learn_terms
+        if resolucao.ambiguous:
+            opcoes = resolucao.subject_options
+            nomes = " ou ".join(s.display for s in opcoes[:3])
             return (
                 None,
-                "De qual matéria você está falando?",
-                [{"label": s.display, "value": s.id} for s in ambiguous],
+                f"É de {nomes}?" if len(opcoes) <= 3 else "De qual matéria você está falando?",
+                [{"label": s.display, "value": s.id} for s in opcoes],
+                [],
             )
 
     if teacher_text:
@@ -319,14 +416,15 @@ def _resolve_subject_reference(
             for person in people:
                 subjects.extend(academic.subjects_of_teacher(db, user.id, person.id))
             if len(subjects) == 1:
-                return subjects[0], "", []
+                return subjects[0], "", [], []
             if len(subjects) > 1:
                 return (
                     None,
                     "Você está falando de qual matéria?",
                     [{"label": s.display, "value": s.id} for s in subjects],
+                    [],
                 )
-    return None, "", []
+    return None, "", [], []
 
 
 def _extract_teacher_name(text: str) -> str:

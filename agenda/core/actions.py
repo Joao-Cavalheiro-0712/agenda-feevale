@@ -216,7 +216,7 @@ def execute(
     if proposal.confidence < config.CONFIDENCE_REVIEW and not confirmed:
         return ActionResult(
             "NEEDS_CLARIFICATION",
-            message=proposal.question or "Não tenho certeza do que você quis dizer. Pode detalhar?",
+            message=proposal.question or _o_que_falta(proposal),
             question=proposal.question,
             options=proposal.options,
         )
@@ -252,6 +252,17 @@ def execute(
     record.executed_at = dt.datetime.now(dt.timezone.utc)
     result.action_id = record.id
     result.undoable = record.undoable
+
+    # A ação deu certo: o jeito como esta pessoa escreveu vira conhecimento.
+    # Aprender só aqui, e não na interpretação, é proposital — proposta que o
+    # usuário cancelou não pode ensinar nada, senão o sistema decoraria o
+    # próprio erro e o repetiria com mais confiança.
+    termos = proposal.payload.get("learn_terms")
+    if termos:
+        from agenda.knowledge import resolver
+
+        resolver.learn_from(db, user, termos)
+
     db.flush()
     return result
 
@@ -307,6 +318,9 @@ def undo(db: Session, user: User, action_id: str) -> ActionResult:
         return ActionResult("REJECTED", message="Essa ação não pode ser desfeita.")
 
     record.status = "UNDONE"
+    # Desfazer é o usuário dizendo "não era isso". O que essa ação ensinou
+    # precisa ser esquecido, ou o sistema repetiria o erro com mais convicção.
+    _unlearn(db, user, record)
     events_core.log(
         db, user_id=user.id, actor="user", action="UNDO", object_type=record.target_type,
         object_id=record.target_id, before=record.after_state, after=record.before_state,
@@ -314,6 +328,35 @@ def undo(db: Session, user: User, action_id: str) -> ActionResult:
     )
     db.flush()
     return ActionResult("EXECUTED", message=message)
+
+
+def _o_que_falta(proposal: ActionProposal) -> str:
+    """Diz o que já foi entendido e pede só a peça que falta.
+
+    Confiança baixa quase nunca é "não entendi nada" — é uma peça faltando.
+    Nomear a peça é a diferença entre o usuário completar a frase e o usuário
+    desistir.
+    """
+    payload = proposal.payload or {}
+    tem_data = bool(payload.get("date"))
+    tem_materia = bool(payload.get("subject_id"))
+    titulo = payload.get("title") or ""
+
+    if titulo and not tem_data:
+        return f"Anotei “{titulo}”. Para quando é?"
+    if titulo and not tem_materia:
+        return f"Anotei “{titulo}”. É de qual matéria?"
+    if not tem_data:
+        return "Para quando é?"
+    return "Me dá um detalhe a mais: o que é e de qual matéria?"
+
+
+def _unlearn(db: Session, user: User, record: AiAction) -> None:
+    from agenda.knowledge import store
+
+    for item in (record.payload or {}).get("learn_terms") or []:
+        if item.get("kind") and item.get("term"):
+            store.forget(db, user, item["kind"], item["term"])
 
 
 # --------------------------------------------------------------------------- #

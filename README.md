@@ -150,6 +150,22 @@ Os limites são **entitlements** (`agenda/core/billing.py`), não condicionais
 espalhados: cada recurso pergunta "posso?" a um lugar só. A cobrança tem
 provedor plugável — ligar o gateway é configuração, não reescrita.
 
+## Como o app entende o que você escreve
+
+O agente é o raciocínio; o conhecimento é nosso. Uma base local — fonética do
+português brasileiro, léxico acadêmico com 198 termos ("p1", "trampo", "sub",
+"tema"), e o vocabulário que cada usuário ensina ao confirmar — resolve a maior
+parte das mensagens **sem chamar modelo nenhum**: "tem p1 de istoria sexta"
+vira prova de História na sexta, de graça e instantâneo.
+
+O modelo externo só entra no que sobra, e com um prompt recuperado pela
+mensagem (~40% menor com 20 matérias). Quando há ambiguidade real, o sistema
+pergunta com as opções na tela — "É de Cálculo I ou Cálculo II?" — em vez de
+escolher no escuro ou responder "não entendi".
+
+Detalhes, incluindo o que a semelhança nunca pode fazer:
+[`docs/CONHECIMENTO.md`](docs/CONHECIMENTO.md).
+
 ## Segurança
 
 Isolamento entre contas com escopo obrigatório e falha fechada, sessões
@@ -181,6 +197,8 @@ agenda/
   core/       regras determinísticas — datas, recorrência, lembretes, períodos,
               perfis por nível, escopo/isolamento, motor de ações, planner,
               planos, família, notas, estudo   (fonte de verdade)
+  knowledge/  base própria — fonética PT-BR, léxico acadêmico, memória de
+              vocabulário por usuário, recuperação para prompt enxuto
   ai/         interpretação — provedores plugáveis, prompts versionados,
               contexto seletivo, heurística de reserva, onboarding por voz
   ingest/     pipeline documental — extração nativa → visão só onde precisa
@@ -188,8 +206,9 @@ agenda/
   jobs/       workers: lembretes, reconciliação, retenção de mídia
   web/        páginas, API JSON, webhooks e tempo real (SSE)
 migrations/   Alembic — schema versionado
-docs/         ARQUITETURA.md, SEGURANCA.md, LGPD.md e COBERTURA-SPEC.md
-tests/        250 testes + golden dataset versionado
+docs/         ARQUITETURA.md, SEGURANCA.md, LGPD.md, CONHECIMENTO.md
+              e COBERTURA-SPEC.md
+tests/        329 testes + golden dataset versionado
 ```
 
 Duas regras guiam tudo:

@@ -1,8 +1,11 @@
-"""Montagem do contexto enviado à IA (SPEC §71).
+"""Contexto amplo para quando não há uma frase para focar (SPEC §71).
 
-Contexto seletivo, não o histórico inteiro do usuário: perfil, contexto
-educacional ativo, matérias com apelidos, professores, locais, horários e os
-eventos próximos.
+Usado na leitura de documentos: um cronograma inteiro pode citar qualquer
+matéria, então aqui vale mandar o quadro completo.
+
+Para mensagem de conversa — que é a maioria esmagadora das chamadas — quem
+monta o contexto é `agenda.knowledge.retrieval`, que recupera só o que a frase
+precisa e derruba o tamanho do prompt.
 """
 from __future__ import annotations
 

@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from agenda.core.text import norm
+from agenda.knowledge import fuzzy
 from agenda.models import (
     ClassSchedule,
     EducationContext,
@@ -127,12 +128,23 @@ def list_subjects(
 
 
 def resolve_subject(
-    db: Session, user_id: str, text: str, *, context_id: str | None = None
+    db: Session,
+    user_id: str,
+    text: str,
+    *,
+    context_id: str | None = None,
+    approximate: bool = True,
 ) -> tuple[Subject | None, list[Subject]]:
     """Encontra a disciplina citada em texto livre.
 
     Devolve ``(match, ambiguous)``. Quando há mais de um candidato igualmente
     plausível, ``match`` é ``None`` e cabe ao chamador perguntar (SPEC §3.3).
+
+    ``approximate`` liga o casamento por som e por distância de edição. Ele
+    existe para **interpretar mensagem** ("cauculo", "istoria") e deve ficar
+    desligado para **deduplicar cadastro**: sem isso, criar "Direito
+    Constitucional" devolveria a "Direito Penal" já existente e a matéria nova
+    nunca seria criada.
     """
     if not text:
         return None, []
@@ -144,6 +156,17 @@ def resolve_subject(
     if not subjects:
         subjects = list_subjects(db, user_id, context_id=context_id, active_only=False)
 
+    if not approximate:
+        # Identidade, não semelhança: só o nome próprio da matéria conta.
+        # Apelidos ficam de fora porque são gerados automaticamente e podem
+        # colidir — "Cálculo I" e "Cálculo II" geram o mesmo "calculo", e usar
+        # isso como critério faria a segunda matéria nunca ser criada.
+        iguais = [
+            s for s in subjects
+            if target in {norm(s.name), norm(s.short_name)} - {""}
+        ]
+        return (iguais[0], []) if len(iguais) == 1 else (None, iguais)
+
     exact: list[Subject] = []
     partial: list[Subject] = []
     for subject in subjects:
@@ -152,7 +175,7 @@ def resolve_subject(
         if target in names:
             exact.append(subject)
             continue
-        if any(n and (n in target or target in n) for n in names):
+        if any(n and _contem_palavra(target, n) for n in names):
             partial.append(subject)
         elif _abbreviation_match(target, names):
             partial.append(subject)
@@ -165,7 +188,78 @@ def resolve_subject(
         return partial[0], []
     if partial:
         return None, partial
-    return None, []
+
+    if not approximate:
+        return None, []
+
+    # Nada casou pela escrita. Antes de desistir — e antes de gastar um
+    # modelo — tenta pelo som: "cauculo", "fizica", "portuguez", e tudo que a
+    # transcrição de áudio erra, que erra exatamente aí.
+    # Lista de pares, não dicionário: o mesmo apelido pode pertencer a duas
+    # matérias ("calculo" em Cálculo I e Cálculo II), e é justamente esse caso
+    # que precisa virar empate — e pergunta — em vez de escolha silenciosa.
+    candidatos: list[tuple[str, str]] = [
+        (nome, subject.id)
+        for subject in subjects
+        for nome in {subject.name, subject.short_name} | {a.alias for a in subject.aliases}
+        if nome
+    ]
+
+    escolhido, score, empatados = fuzzy.best_match(target, candidatos)
+    frase_incerta = escolhido is None or score < fuzzy.LIMIAR_CONFIANTE or empatados
+    if frase_incerta and _parece_mensagem(target):
+        # O texto é a frase inteira ("tem p1 de istoria sexta"), e não um nome.
+        # Aí sim vale procurar palavra a palavra, porque é assim que a matéria
+        # aparece no meio da mensagem.
+        palavras = target.split()
+        # Pares de palavras primeiro: "cauculo 2" precisa achar "Cálculo II"
+        # antes que "cauculo" sozinho ache "Cálculo" e ignore o número.
+        trechos = [f"{a} {b}" for a, b in zip(palavras, palavras[1:])] + palavras
+        for trecho in trechos:
+            if len(trecho) < 4:
+                continue
+            candidato, pontos, empates = fuzzy.best_match(
+                trecho, candidatos, limiar=fuzzy.LIMIAR_CONFIANTE
+            )
+            if candidato and pontos > score:
+                escolhido, score, empatados = candidato, pontos, empates
+    if escolhido is None:
+        return None, []
+    por_id = {s.id: s for s in subjects}
+    if score < fuzzy.LIMIAR_CONFIANTE or empatados:
+        # Parecido, mas não o suficiente para decidir sozinho: devolve como
+        # ambíguo para quem chamou perguntar com opções concretas.
+        opcoes = [por_id[i] for i in ([escolhido] + empatados) if i in por_id]
+        return None, opcoes
+    return por_id[escolhido], []
+
+
+def _contem_palavra(texto: str, termo: str) -> bool:
+    """Contém respeitando fronteira de palavra, nos dois sentidos.
+
+    Sem a fronteira, "calculo i" casa dentro de "calculo ii" e as duas
+    matérias viram uma só — foi assim que "Cálculo I" e "Cálculo II"
+    colidiam.
+    """
+    a, b = f" {texto} ", f" {termo} "
+    return b in a or a in b
+
+
+def _parece_mensagem(target: str) -> bool:
+    """Distingue "tem prova de istoria sexta" de "Direito Constitucional".
+
+    A diferença importa muito: varrer palavra a palavra é o certo para uma
+    frase e é perigoso para um nome — "direito" sozinho reivindicaria "Direito
+    Penal" mesmo quando o nome completo diz outra coisa. O sinal usado é a
+    presença de uma palavra de atividade do léxico ("prova", "p1", "trampo"),
+    que nome de matéria não tem.
+    """
+    from agenda.knowledge import lexicon
+
+    if len(target.split()) < 3:
+        return False
+    tipo, _termo, _score = lexicon.find_event_type(target)
+    return tipo is not None
 
 
 def _abbreviation_match(target: str, names: set[str]) -> bool:
@@ -198,8 +292,14 @@ def upsert_subject(
     location_id: str | None = None,
     notes: str = "",
 ) -> Subject:
-    """Cria ou reaproveita uma disciplina (idempotente por nome normalizado)."""
-    existing, _ = resolve_subject(db, user_id, name, context_id=context_id)
+    """Cria ou reaproveita uma disciplina (idempotente por nome normalizado).
+
+    Sem casamento aproximado de propósito: aqui o critério é identidade, não
+    semelhança. "Cálculo I" e "Cálculo II" são duas matérias.
+    """
+    existing, _ = resolve_subject(
+        db, user_id, name, context_id=context_id, approximate=False
+    )
     if existing:
         if teacher_id and not existing.teacher_id:
             existing.teacher_id = teacher_id

@@ -36,10 +36,7 @@ def handle_message(
     )
     proposals = interpretation.proposals
     if not proposals:
-        reply = interpretation.reply or (
-            "Não entendi. Você pode me dizer, por exemplo: "
-            "“prova de matemática sexta” ou “o que tenho essa semana?”."
-        )
+        reply = interpretation.reply or _pergunta_util(db, user, text)
         _record(db, user, "assistant", reply, channel, None)
         return ActionResult("REJECTED", message=reply).as_dict()
 
@@ -64,6 +61,51 @@ def undo(db: Session, user: User, action_id: str) -> dict:
     result = actions_core.undo(db, user, action_id)
     _record(db, user, "assistant", result.message, "web", result.as_dict())
     return result.as_dict()
+
+
+def _pergunta_util(db: Session, user: User, text: str) -> str:
+    """Resposta de quando não deu para montar nada.
+
+    Regra: nunca devolver só "não entendi". Isso empurra o trabalho de volta
+    para quem já escreveu uma vez, e é o jeito mais rápido de fazer alguém
+    desistir do app. Aqui a resposta sempre diz **o que foi reconhecido** e
+    pede exatamente **a peça que falta** — e, quando não reconheceu nada,
+    oferece exemplos no vocabulário do nível do estudante.
+    """
+    from agenda.core import academic, profiles
+    from agenda.knowledge import lexicon, resolver
+
+    contexto = academic.active_context(db, user.id)
+    perfil = profiles.profile_for(contexto.type if contexto else None)
+
+    if lexicon.looks_like_question(text):
+        return (
+            "Não achei nada com isso. Tenta assim: “o que eu tenho amanhã?”, "
+            "“quais provas estão chegando?” ou “o que está atrasado?”."
+        )
+
+    tipo, _termo, _score = lexicon.find_event_type(text)
+    materia = resolver.resolve_subject(db, user, text)
+    rotulo = profiles.type_label(tipo, contexto.type if contexto else None) if tipo else ""
+
+    # Reconheceu a atividade, faltou a data — a peça que mais falta.
+    if tipo and materia.resolved:
+        return f"Entendi: {rotulo.lower()} de {materia.subject.display}. Para quando é?"
+    if tipo:
+        return f"Entendi que é {rotulo.lower()}. De qual matéria, e para quando?"
+    if materia.resolved:
+        return (
+            f"Entendi que é de {materia.subject.display}, mas não peguei o que é. "
+            "É prova, trabalho, tema de casa?"
+        )
+    if materia.suggested_subject_name:
+        return (
+            f"Você quis dizer {materia.suggested_subject_name}? "
+            "Ainda não tenho essa matéria cadastrada — me diga o que é e para quando."
+        )
+
+    exemplos = " ou ".join(f"“{e}”" for e in perfil.capture_examples[:2])
+    return f"Não peguei essa. Pode mandar assim: {exemplos}."
 
 
 def _handle_batch(db: Session, user: User, proposals: list[ActionProposal], channel: str) -> dict:

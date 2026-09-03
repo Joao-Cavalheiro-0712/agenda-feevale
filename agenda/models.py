@@ -879,6 +879,49 @@ class StudyBlock(Base):
 
 
 # --------------------------------------------------------------------------- #
+# Base de conhecimento aprendida (SPEC §42, §70)
+# --------------------------------------------------------------------------- #
+class KnowledgeKind(str, enum.Enum):
+    """O que a entrada aprendida resolve."""
+
+    SUBJECT = "SUBJECT"        # termo → id de matéria
+    EVENT_TYPE = "EVENT_TYPE"  # termo → tipo de atividade
+    TEACHER = "TEACHER"        # termo → id de professor
+    LOCATION = "LOCATION"      # termo → id de local
+
+
+class KnowledgeEntry(Base):
+    """Vocabulário que este usuário ensinou ao sistema.
+
+    Toda vez que alguém confirma "sim, era Biologia Celular", a forma como ele
+    escreveu vira uma entrada aqui. Na próxima vez a resolução é local: sem
+    chamada de modelo, sem custo, sem espera — e mais certeira, porque é o
+    vocabulário dele e não o do mundo.
+
+    É por usuário de propósito. "bio" pode ser Biologia Celular para um e
+    Bioquímica para outro; misturar os dois pioraria os dois.
+    """
+
+    __tablename__ = "knowledge_entries"
+    __table_args__ = (
+        UniqueConstraint("user_id", "kind", "key_norm", name="uq_knowledge_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(20), index=True)
+    key_raw: Mapped[str] = mapped_column(String(120), default="")
+    key_norm: Mapped[str] = mapped_column(String(120), index=True)
+    key_phonetic: Mapped[str] = mapped_column(String(120), index=True, default="")
+    value: Mapped[str] = mapped_column(String(60))
+    # Quantas vezes já acertou. Serve de desempate e de sinal de qualidade.
+    hits: Mapped[int] = mapped_column(Integer, default=1)
+    source: Mapped[str] = mapped_column(String(20), default="confirm")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_used_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# --------------------------------------------------------------------------- #
 # Consentimento e privacidade (LGPD art. 8º §1º, art. 14, art. 37)
 # --------------------------------------------------------------------------- #
 class ConsentKind(str, enum.Enum):
