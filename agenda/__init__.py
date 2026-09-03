@@ -15,6 +15,7 @@ import os
 from flask import Flask, g, render_template, request, session
 
 from agenda import config
+from agenda.core import oidc
 from agenda.db import init_db
 
 __version__ = "1.0.0"
@@ -111,6 +112,9 @@ def create_app() -> Flask:
             "nonce": getattr(g, "nonce", ""),
             "version": __version__,
             "privacy_email": config.PRIVACY_EMAIL,
+            # Só os provedores com chave configurada. Botão que devolve erro é
+            # pior que botão nenhum.
+            "social_providers": oidc.disponiveis(),
         }
 
     @app.errorhandler(413)

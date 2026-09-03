@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import mark %}
+{% block title %}Falta pouco · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap"><a class="wordmark" href="{{ url_for('pages.home') }}">{{ mark() }}{{ APP_NAME }}</a></div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead" style="padding-top:var(--s7)">
+  <p class="label kicker">{{ pendente.provedor|capitalize }} confirmou seu e-mail</p>
+  <h2 class="h-page">Falta <span class="grifo-sob">pouco</span></h2>
+  <p class="sub">Você entra como <strong>{{ pendente.email }}</strong>. Só mais dois campos e a agenda é sua.</p>
+</div>
+<form method="post" style="max-width:380px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="field">
+    <span>Ano de nascimento</span>
+    <input type="text" name="birth_year" required inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="2004" autocomplete="bday-year" autofocus>
+    <span class="help">Precisamos saber só o ano. Menores de 18 usam o {{ APP_NAME }} por uma conta criada pelo responsável.</span>
+  </label>
+
+  <div class="card" style="margin:var(--s4) 0">
+    <label class="consent">
+      <input type="checkbox" name="accept_terms" value="on" required>
+      <span class="tiny">Tenho 18 anos ou mais e aceito os
+        <a class="link" href="{{ url_for('pages.terms_page') }}" target="_blank" rel="noopener">Termos de uso</a>
+        e a <a class="link" href="{{ url_for('pages.privacy_page') }}" target="_blank" rel="noopener">Política de privacidade</a>.</span>
+    </label>
+    <hr class="divider" style="margin:var(--s3) 0">
+    <label class="consent">
+      <input type="checkbox" name="ai_processing" value="on" checked>
+      <span class="tiny">Autorizo que o conteúdo que eu enviar (áudio, foto, documento) seja lido por
+        interpretação automática para montar minha agenda. Dá para desligar depois — sem isso,
+        o cadastro continua funcionando no modo manual.</span>
+    </label>
+  </div>
+
+  <button class="btn marca block" type="submit">Criar minha conta</button>
+  <p class="help">Você não precisa de senha: entra sempre pelo {{ pendente.provedor|capitalize }}.</p>
+</form>
+<p class="tiny muted" style="margin-top:var(--s5)">Mudou de ideia? <a href="{{ url_for('auth.login') }}" class="link">Voltar</a></p>
+{% endblock %}

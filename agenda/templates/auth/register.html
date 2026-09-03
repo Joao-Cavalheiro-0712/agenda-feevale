@@ -49,6 +49,7 @@
   <button class="btn marca block" type="submit">Criar conta</button>
   <p class="help">Guardamos o registro do seu aceite: qual versão, quando e de onde. Você pode exportar ou apagar tudo quando quiser.</p>
 </form>
+{% include 'partials/social_buttons.html' %}
 {% endblock %}
 {% block scripts %}
 <script nonce="{{ nonce }}">try { document.getElementById('tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {}</script>

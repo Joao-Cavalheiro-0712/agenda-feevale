@@ -570,3 +570,14 @@ blockquote.trecho {
 }
 .ciclo a.ativo { background: var(--ink); color: var(--paper); font-weight: 600; }
 .ciclo a.ativo .tag { background: var(--grifo); color: var(--ink); border-color: transparent; }
+
+/* Login social ------------------------------------------------------------ */
+.social-login { max-width: 380px; margin-top: var(--s5); }
+.social-login .ou {
+  display: flex; align-items: center; gap: var(--s3);
+  color: var(--ink-4); font-size: .78rem; margin: var(--s5) 0 var(--s4);
+}
+.social-login .ou::before, .social-login .ou::after {
+  content: ""; flex: 1; height: 1px; background: var(--rule);
+}
+.social-login .btn + .btn { margin-top: var(--s3); }

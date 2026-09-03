@@ -259,3 +259,49 @@ pytest tests/test_indicacao.py -q     # fraude de indicação
 python -m agenda.cli check            # sanidade da configuração de produção
 python -m pyflakes agenda tests       # análise estática
 ```
+
+## Entrar com Google e com Apple
+
+Authorization Code + PKCE, com `state`, `nonce` e verificação de assinatura
+pela JWKS do provedor. Nunca implicit: token na URL fica no histórico, no
+`Referer` e no log do servidor.
+
+O id_token só vale depois de conferir, nesta ordem: assinatura (pela chave do
+`kid`), `iss`, `aud`, `exp` e `nonce`. `jwt.decode(..., verify_signature=False)`
+seria a linha que transforma o login num formulário de "digite quem você quer
+ser" — é a vulnerabilidade "JWT não validado" da lista, e há teste afirmando
+que uma assinatura de outra chave é recusada.
+
+**O cookie de estado é separado do de sessão, de propósito.** A Apple responde
+com `response_mode=form_post` (POST cross-site), e o cookie de sessão é
+`SameSite=Lax`, que não acompanha POST cross-site. Em vez de afrouxar o cookie
+principal — trocando uma integração por um buraco de CSRF em todo o app — o
+`state`/`nonce`/`code_verifier` viajam num cookie próprio, assinado, de 10
+minutos, `SameSite=None; Secure; HttpOnly`, restrito a `Path=/entrar`.
+
+**Vinculação de conta e o pre-hijack.** O ataque: alguém cadastra
+`vitima@gmail.com` com senha e nunca confirma o e-mail; meses depois a vítima
+clica em "Entrar com Google" e, se a vinculação for ingênua, cai dentro da
+conta do atacante — que continua com a senha e passa a ler tudo.
+
+A regra: o provedor afirmando `email_verified` **prova** posse do e-mail; uma
+conta local não confirmada **não prova nada**. Quando a conta local existe e
+não está confirmada, a identidade do provedor vence — o e-mail passa a
+confirmado, a senha é invalidada e todas as sessões caem. Quando já estava
+confirmada, os dois lados provaram o mesmo e-mail e a vinculação é direta.
+
+Conta nova **não é criada na volta do provedor**: falta ano de nascimento e
+aceite. Criar antes disso seria tratamento sem base legal, e conta de menor
+criada sozinha é exatamente o que o art. 14 proíbe. A identidade verificada
+fica na sessão até a pessoa completar `/criar-conta/social`.
+
+Configuração — sem chave, o botão não aparece:
+
+| Variável | O que é |
+|---|---|
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Credenciais OAuth do Google Cloud |
+| `APPLE_CLIENT_ID` | O **Services ID**, não o bundle do app |
+| `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | A Apple não dá segredo: a gente assina um JWT ES256 com a chave `.p8`, válido por 1 hora e gerado a cada login |
+
+O `redirect_uri` registrado no provedor precisa ser
+`https://<domínio>/entrar/<google|apple>/retorno`.

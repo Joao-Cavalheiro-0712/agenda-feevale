@@ -15,6 +15,7 @@
   <label class="field"><span>Senha</span><input type="password" name="password" required autocomplete="current-password"></label>
   <button class="btn block" type="submit">Entrar</button>
 </form>
+{% include 'partials/social_buttons.html' %}
 <p class="tiny muted" style="margin-top:var(--s5)"><a href="{{ url_for('auth.recover') }}" class="link">Esqueci minha senha</a></p>
 <p class="tiny muted" style="margin-top:var(--s3)">Ainda não tem conta? <a href="{{ url_for('auth.register') }}" class="link">Criar agora</a></p>
 <p class="tiny muted" style="margin-top:var(--s6)">

@@ -16,6 +16,7 @@ from flask import Blueprint, flash, redirect, render_template, request, session,
 from agenda import config
 from agenda.core import (
     login_guard,
+    oidc,
     phone as phone_utils,
     privacy,
     sessions,
@@ -387,3 +388,172 @@ def confirm_phone():
     else:
         flash("Código inválido ou expirado. Peça outro.", "error")
     return redirect(url_for("pages.security_page"))
+
+
+# --------------------------------------------------------------------------- #
+# Entrar com Google e com Apple
+# --------------------------------------------------------------------------- #
+IDENTIDADE_NA_SESSAO = "oidc_pendente"
+
+
+def _redirect_uri(slug: str) -> str:
+    return f"{_base_url()}/entrar/{slug}/retorno"
+
+
+@bp.route("/entrar/<slug>")
+@limited("oidc")
+def oidc_start(slug: str):
+    prov = oidc.provider(slug)
+    if prov is None or not prov.configurado():
+        flash("Esse jeito de entrar não está disponível agora.", "error")
+        return redirect(url_for("auth.login"))
+
+    url, estado = oidc.começar(
+        prov,
+        redirect_uri=_redirect_uri(prov.slug),
+        proximo=_safe_next(request.args.get("next")),
+    )
+    resposta = redirect(url)
+    # SameSite=None porque a Apple volta com POST cross-site e Lax não deixaria
+    # o cookie acompanhar. É um cookie curto, assinado e só com o estado do
+    # fluxo — afrouxar o cookie de sessão principal para isso seria trocar uma
+    # integração por um buraco de CSRF no app inteiro.
+    resposta.set_cookie(
+        oidc.STATE_COOKIE,
+        oidc.selar(estado),
+        max_age=oidc.STATE_TTL_SEGUNDOS,
+        httponly=True,
+        secure=config.IS_PRODUCTION,
+        samesite="None" if config.IS_PRODUCTION else "Lax",
+        path="/entrar",
+    )
+    return resposta
+
+
+@bp.route("/entrar/<slug>/retorno", methods=["GET", "POST"])
+@limited("oidc")
+def oidc_callback(slug: str):
+    prov = oidc.provider(slug)
+    if prov is None or not prov.configurado():
+        return redirect(url_for("auth.login"))
+
+    dados = request.form if request.method == "POST" else request.args
+    resposta_de_erro = redirect(url_for("auth.login"))
+    resposta_de_erro.delete_cookie(oidc.STATE_COOKIE, path="/entrar")
+
+    if dados.get("error"):
+        # Usuário clicou em "cancelar" no provedor: não é falha, é desistência.
+        flash("Login cancelado.", "error")
+        return resposta_de_erro
+
+    try:
+        estado = oidc.abrir(
+            request.cookies.get(oidc.STATE_COOKIE),
+            state_recebido=dados.get("state", ""),
+        )
+        if estado.get("p") != prov.slug:
+            raise oidc.OidcError("provedor do estado não confere")
+        identidade = oidc.concluir(
+            prov,
+            code=dados.get("code", ""),
+            estado=estado,
+            nome_do_formulario=_nome_da_apple(dados),
+        )
+    except oidc.OidcError as erro:
+        # O detalhe vai para o log; a tela recebe uma frase única, porque
+        # mensagem específica aqui vira ferramenta de sondagem.
+        print(f"[oidc] {erro}")
+        flash("Não consegui concluir esse login. Tente de novo.", "error")
+        return resposta_de_erro
+    except Exception as erro:  # noqa: BLE001 - rede/provedor fora do ar
+        print(f"[oidc] falha inesperada: {erro!r}")
+        flash("O provedor não respondeu. Tente de novo em instantes.", "error")
+        return resposta_de_erro
+
+    existente = oidc.conta_existente(db(), identidade)
+    if existente is not None:
+        db().commit()
+        login_user(existente)
+        destino = estado.get("next") or url_for("pages.today")
+        saida = redirect(destino if existente.onboarding_done else url_for("pages.onboarding"))
+        saida.delete_cookie(oidc.STATE_COOKIE, path="/entrar")
+        return saida
+
+    # Conta nova: ainda NÃO existe usuário. Falta o ano de nascimento e o
+    # aceite — criar antes disso seria tratar dado sem base legal, e conta de
+    # menor criada sozinha é o que o art. 14 proíbe.
+    session[IDENTIDADE_NA_SESSAO] = {
+        "provedor": identidade.provedor, "email": identidade.email,
+        "nome": identidade.nome, "sub": identidade.sub,
+    }
+    saida = redirect(url_for("auth.oidc_finish"))
+    saida.delete_cookie(oidc.STATE_COOKIE, path="/entrar")
+    return saida
+
+
+def _nome_da_apple(dados) -> str:
+    """A Apple manda o nome UMA única vez, em JSON, e só na primeira vez."""
+    bruto = dados.get("user")
+    if not bruto:
+        return ""
+    try:
+        import json
+
+        pessoa = json.loads(bruto).get("name") or {}
+        return f"{pessoa.get('firstName', '')} {pessoa.get('lastName', '')}".strip()
+    except Exception:  # noqa: BLE001 - nome é conveniência, nunca requisito
+        return ""
+
+
+@bp.route("/criar-conta/social", methods=["GET", "POST"])
+@limited("register")
+def oidc_finish():
+    """Últimos dois campos de quem chegou por Google/Apple: nascimento e aceite.
+
+    Mesmas regras do cadastro normal — a porta de entrada muda, o contrato e a
+    LGPD não.
+    """
+    pendente = session.get(IDENTIDADE_NA_SESSAO)
+    if not pendente:
+        return redirect(url_for("auth.login"))
+
+    if request.method == "POST":
+        birth_year = _parse_birth_year(request.form.get("birth_year"))
+        aceitou = request.form.get("accept_terms") in ("on", "1", "true")
+
+        if birth_year is None:
+            flash("Informe o ano em que você nasceu.", "error")
+            return render_template("auth/social.html", pendente=pendente)
+        if not privacy.is_adult(birth_year):
+            return render_template(
+                "auth/menor_de_idade.html",
+                name=pendente.get("nome", ""),
+                idade=privacy.age_from_year(birth_year),
+            ), 200
+        if not aceitou:
+            flash("Para criar a conta é preciso aceitar os termos e a política.", "error")
+            return render_template("auth/social.html", pendente=pendente)
+
+        # Corrida: alguém pode ter criado a conta com esse e-mail entre a volta
+        # do provedor e este POST.
+        identidade = oidc.Identidade(
+            provedor=pendente["provedor"], email=pendente["email"],
+            nome=pendente["nome"], sub=pendente.get("sub", ""),
+        )
+        user = oidc.conta_existente(db(), identidade)
+        if user is None:
+            user = oidc.criar_conta(db(), identidade, birth_year=birth_year)
+            privacy.accept_documents(
+                db(), user,
+                ip=_client_ip(),
+                user_agent=request.headers.get("User-Agent", ""),
+                origin=identidade.provedor,
+                ai_processing=request.form.get("ai_processing", "on") in ("on", "1", "true"),
+            )
+            _atribuir_indicacao(user)
+        session.pop(IDENTIDADE_NA_SESSAO, None)
+        db().commit()
+        login_user(user)
+        return redirect(url_for("pages.onboarding"))
+
+    return render_template("auth/social.html", pendente=pendente)

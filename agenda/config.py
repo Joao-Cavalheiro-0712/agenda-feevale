@@ -157,6 +157,9 @@ def flag(name: str) -> bool:
 # ASSINANTE — cartão de crédito é a prova de gente que nenhum limite de IP dá.
 RATE_LIMITS = {
     "login": (int(_env("RATE_LIMIT_LOGIN", "10")), 60),
+    # Login social é mais caro (round-trip ao provedor) e mais atrativo para
+    # varredura, mas a família inteira pode entrar do mesmo IP.
+    "oidc": (int(_env("RATE_LIMIT_OIDC", "20")), 300),
     "register": (int(_env("RATE_LIMIT_REGISTER", "40")), 600),
     "share": (int(_env("RATE_LIMIT_SHARE", "20")), 60),
     "export": (int(_env("RATE_LIMIT_EXPORT", "10")), 60),
@@ -203,6 +206,19 @@ REFUND_WINDOW_DAYS = int(_env("REFUND_WINDOW_DAYS", "7"))
 # --------------------------------------------------------------------------- #
 # Privacidade e contato do titular (LGPD art. 41)
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Entrar com Google e com Apple (OIDC)
+# --------------------------------------------------------------------------- #
+# Sem chave, o botão simplesmente não aparece: mostrar um botão que devolve
+# erro é pior que não mostrar botão nenhum.
+GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = _env("GOOGLE_CLIENT_SECRET", "")
+# A Apple não dá um segredo: dá uma chave .p8 com a qual a gente assina um JWT.
+APPLE_CLIENT_ID = _env("APPLE_CLIENT_ID", "")       # o Services ID, não o bundle
+APPLE_TEAM_ID = _env("APPLE_TEAM_ID", "")
+APPLE_KEY_ID = _env("APPLE_KEY_ID", "")
+APPLE_PRIVATE_KEY = _env("APPLE_PRIVATE_KEY", "")   # conteúdo do .p8, \n escapado
+
 PRIVACY_EMAIL = _env("PRIVACY_EMAIL", "privacidade@grifo.app")
 DPO_NAME = _env("DPO_NAME", "a definir antes do lançamento comercial")
 COMPANY_NAME = _env("COMPANY_NAME", APP_NAME)

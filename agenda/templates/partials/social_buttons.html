@@ -1,0 +1,12 @@
+{# Botões de login social. Só aparecem os provedores realmente configurados —
+   botão que devolve erro é pior que botão nenhum. #}
+{% if social_providers %}
+<div class="social-login">
+  <div class="ou"><span>ou</span></div>
+  {% for prov in social_providers %}
+    <a class="btn ghost block social-{{ prov.slug }}" href="{{ url_for('auth.oidc_start', slug=prov.slug) }}">
+      Continuar com {{ prov.nome }}
+    </a>
+  {% endfor %}
+</div>
+{% endif %}
