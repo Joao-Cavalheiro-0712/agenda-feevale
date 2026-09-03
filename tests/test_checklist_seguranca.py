@@ -92,6 +92,8 @@ def test_2_nenhuma_rota_do_app_responde_sem_sessao(app):
         "/plano-de-estudo", "/notificacoes", "/buscar", "/admin",
         "/api/planner/today", "/api/planner/week", "/api/export",
         "/api/notifications", "/api/plan",
+        # Superfície nova: exportação, tour e a área de chaves de acesso.
+        "/conta/meus-dados.json", "/apresentacao",
     ]
     vazadas = []
     for caminho in protegidas:
@@ -106,7 +108,11 @@ def test_2b_escrita_tambem_exige_sessao(app):
     for caminho in ("/api/capture", "/api/events"):
         resposta = client.post(caminho, json={})
         assert resposta.status_code in (302, 401, 403, 404), f"{caminho} aceitou anônimo"
-    for caminho in ("/planos/assinar", "/familia/convidar", "/conta/excluir"):
+    for caminho in ("/planos/assinar", "/familia/convidar", "/conta/excluir",
+                    "/conta/reenviar-email", "/conta/telefone/codigo",
+                    "/conta/telefone/confirmar", "/apresentacao/pronto",
+                    "/apresentacao/rever", "/api/passkey/cadastro",
+                    "/api/passkey/cadastro/opcoes"):
         resposta = client.post(caminho, data={})
         assert resposta.status_code in (302, 401, 403, 404), f"{caminho} aceitou anônimo"
 
@@ -187,7 +193,9 @@ def test_5_rotas_sensiveis_tem_limite_declarado():
     from agenda import config
 
     for balde in ("login", "register", "assistant", "upload", "export",
-                  "share", "webhook", "referral", "checkout"):
+                  "share", "webhook", "referral", "checkout",
+                  # Portas de entrada novas: cada uma é um alvo de varredura.
+                  "oidc", "passkey", "recover", "verify"):
         teto, janela = config.RATE_LIMITS[balde]
         assert teto > 0 and janela > 0, f"balde {balde} sem limite"
 
@@ -436,3 +444,108 @@ def test_20b_midia_do_whatsapp_so_de_host_oficial():
     assert _media_url_permitida("https://lookaside.fbsbx.com.evil.com/x") is False
     assert _media_url_permitida("http://lookaside.fbsbx.com/x") is False
     assert _media_url_permitida("https://169.254.169.254/x") is False
+
+
+# --------------------------------------------------------------------------- #
+# 21. Superfície nova: login social, passkey, recuperação e exportação
+#
+# Cada porta de entrada que a gente abre é um alvo. Estes testes existem para
+# que a lista de ameaças acompanhe o produto em vez de virar um retrato de
+# como ele era em setembro.
+# --------------------------------------------------------------------------- #
+def test_21_login_social_verifica_a_assinatura_do_provedor():
+    """A falha clássica de OIDC é ler o payload sem conferir quem assinou."""
+    import ast
+    import inspect
+    import textwrap
+
+    from agenda.core import oidc
+
+    # O docstring cita o antipadrão de propósito; o teste tem de olhar o que o
+    # código FAZ, não o que ele explica. Por isso a árvore, e não o texto.
+    arvore = ast.parse(textwrap.dedent(inspect.getsource(oidc.verificar_id_token)))
+    funcao = arvore.body[0]
+    if ast.get_docstring(funcao):
+        funcao.body = funcao.body[1:]
+    codigo = ast.unparse(funcao)
+
+    assert "verify_signature" not in codigo, "assinatura de id_token nunca pode ser pulada"
+    assert "audience=" in codigo and "issuer=" in codigo
+    assert "nonce" in codigo
+
+
+def test_21b_passkey_exige_verificacao_do_usuario():
+    """Sem isso, um aparelho destravado em cima da mesa entra na conta."""
+    import inspect
+
+    from agenda.core import passkeys
+
+    for funcao in (passkeys.concluir_cadastro, passkeys.autenticar):
+        assert "require_user_verification=True" in inspect.getsource(funcao)
+
+
+def test_21c_recuperacao_de_senha_nao_enumera(app, db, user):
+    """Diferença observável entre 'existe' e 'não existe' vira lista de clientes."""
+    import re as _re
+
+    respostas = []
+    for email in (user.email, "nao-existe-mesmo@example.com"):
+        client = app.test_client()
+        client.get("/recuperar")
+        with client.session_transaction() as sessao:
+            token = sessao.get("csrf", "")
+        resposta = client.post("/recuperar", data={"csrf_token": token, "email": email},
+                               follow_redirects=True)
+        limpo = _re.sub(rb'(value|content|nonce)="[A-Za-z0-9+/=._:-]{16,}"', b"",
+                        resposta.data)
+        respostas.append((resposta.status_code, limpo))
+    assert respostas[0] == respostas[1]
+
+
+def test_21d_exportacao_nao_entra_em_cache_compartilhado(app, db, user):
+    """É a agenda inteira de uma pessoa: proxy nenhum pode guardar isso."""
+    client = app.test_client()
+    client.get("/entrar")
+    with client.session_transaction() as sessao:
+        token = sessao.get("csrf", "")
+    client.post("/entrar", data={"csrf_token": token, "email": user.email,
+                                 "password": "segredo123"})
+    resposta = client.get("/conta/meus-dados.json")
+    assert resposta.status_code == 200
+    assert "no-store" in resposta.headers.get("Cache-Control", "")
+
+
+def test_21e_backup_do_usuario_nunca_carrega_material_de_ataque(db, user):
+    from agenda.core import backup
+
+    bruto = backup.export_user_json(db, user)
+    for proibido in ("password_hash", "token_hash", "ip_hash"):
+        assert proibido not in bruto
+
+
+def test_21f_conta_criada_por_provedor_nao_tem_senha_utilizavel(db):
+    """Senha vazia não pode virar login com senha vazia."""
+    from agenda.core import oidc
+    from agenda.security import verify_password
+
+    identidade = oidc.Identidade(provedor="google", email="nova@example.com",
+                                 nome="Nova", sub="1")
+    conta = oidc.criar_conta(db, identidade, birth_year=1998)
+    db.commit()
+    assert not verify_password("", conta.password_hash)
+    assert not verify_password("qualquer coisa", conta.password_hash)
+
+
+def test_21g_pagamento_avulso_realmente_expira(db, user):
+    """Dinheiro: um mês pago por Pix não pode virar plano vitalício."""
+    import datetime as _dt
+
+    from agenda.core import billing
+    from agenda.models import PlanTier
+
+    billing.change_plan(db, user, PlanTier.STUDENT.value, renews=False,
+                        payment_method="pix")
+    sub = billing.subscription_of(db, user)
+    sub.current_period_end = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=1)
+    db.commit()
+    assert billing.active_plan(db, user).tier == PlanTier.FREE.value
