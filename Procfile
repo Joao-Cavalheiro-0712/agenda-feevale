@@ -1,1 +1,1 @@
-web: python -m agenda.cli migrate && gunicorn wsgi:app --workers 2 --threads 8 --timeout 180 --bind 0.0.0.0:$PORT --access-logfile - --error-logfile -
+web: python -m agenda.cli migrate && gunicorn wsgi:app --workers 2 --threads 16 --worker-class gthread --timeout 180 --graceful-timeout 30 --max-requests 2000 --max-requests-jitter 200 --bind 0.0.0.0:$PORT --access-logfile - --error-logfile -

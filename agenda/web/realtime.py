@@ -6,6 +6,12 @@ que a própria aplicação alimenta — sem servidor extra.
 
 O barramento é em memória (suficiente para um processo). Com vários workers,
 troque `_BUS` por Redis pub/sub mantendo esta mesma interface.
+
+Cada conexão SSE ocupa uma thread do gunicorn enquanto está aberta. Por isso
+limitamos a duas abas por usuário e cinco minutos por conexão (o cliente
+reconecta sozinho). Para muitos usuários simultâneos, o caminho é um worker
+assíncrono (gevent) ou um serviço dedicado de realtime — a interface deste
+módulo não muda.
 """
 from __future__ import annotations
 
@@ -17,7 +23,7 @@ from collections import defaultdict
 
 _LOCK = threading.Lock()
 _BUS: dict[str, list[queue.Queue]] = defaultdict(list)
-_MAX_LISTENERS_PER_USER = 4
+_MAX_LISTENERS_PER_USER = 2
 
 
 def subscribe(user_id: str) -> queue.Queue:
@@ -56,7 +62,7 @@ def publish(user_id: str, event: str, data: dict | None = None) -> int:
 
 # Tempo máximo de uma conexão SSE. O cliente reconecta sozinho; sem isso, uma
 # aba esquecida segura uma thread do servidor para sempre.
-MAX_STREAM_SECONDS = 600
+MAX_STREAM_SECONDS = 300
 
 
 def stream(user_id: str):
