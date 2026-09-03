@@ -19,12 +19,24 @@ from agenda.models import EducationContext, EducationType, PeriodKind, User
 
 
 def transcribe(db: Session, user: User, audio: bytes, mime_type: str) -> str:
+    """Transcreve o áudio do onboarding, cobrando a quota de minutos.
+
+    O onboarding conta quota como qualquer outro áudio: se não contasse, seria
+    o caminho para transcrição de graça — basta refazer o onboarding.
+    """
+    from agenda.core import billing
+
     if not ai_available():
+        return ""
+    pode, _aviso = billing.check_quota(db, user, billing.MAX_AUDIO_MINUTES, "audio_minutes")
+    if not pode:
         return ""
     resultado = get_speech_provider().transcribe(audio, mime_type or "audio/webm")
     if not resultado.ok:
         return ""
     record_usage(db, user_id=user.id, operation="onboarding_transcribe", result=resultado)
+    billing.consume(db, user, "audio_minutes",
+                    amount=billing.estimate_audio_minutes(len(audio)))
     return resultado.text.strip()
 
 

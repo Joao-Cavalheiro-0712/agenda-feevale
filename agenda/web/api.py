@@ -106,6 +106,14 @@ def capture():
         data = audio.read()
         if len(data) > config.MAX_UPLOAD_BYTES:
             return jsonify({"status": "REJECTED", "message": "Áudio muito longo."}), 400
+        # Áudio é a operação mais cara por unidade: sem medição, um plano
+        # qualquer viraria transcrição ilimitada e a quota não conteria nada.
+        minutos = billing.estimate_audio_minutes(len(data))
+        pode_audio, aviso_audio = billing.check_quota(
+            db(), user, billing.MAX_AUDIO_MINUTES, "audio_minutes"
+        )
+        if not pode_audio:
+            return jsonify({"status": "QUOTA", "message": aviso_audio, "upgrade": "/planos"}), 402
         if not privacy.ai_allowed(user):
             return jsonify(
                 {
@@ -130,6 +138,7 @@ def capture():
             ), 200
         record_usage(db(), user_id=user.id, operation="transcribe", result=result)
         billing.consume(db(), user, "ai_messages")
+        billing.consume(db(), user, "audio_minutes", amount=minutos)
         response = assistant.handle_message(
             db(), user, result.text, channel="web", source_type=SourceType.VOICE.value
         )

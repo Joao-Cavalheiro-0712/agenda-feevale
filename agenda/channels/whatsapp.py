@@ -253,12 +253,25 @@ def _transcribe(db: Session, user: User, message: ChannelMessage) -> str:
     audio = download_media(message.media_id)
     if not audio:
         return ""
+
+    # A mesma quota da web vale aqui: o WhatsApp não pode ser a porta de trás
+    # do limite de áudio, senão o plano deixa de significar nada.
+    from agenda.core import billing
+
+    minutos = billing.estimate_audio_minutes(len(audio))
+    pode, aviso = billing.check_quota(db, user, billing.MAX_AUDIO_MINUTES, "audio_minutes")
+    if not pode:
+        message.error = "quota de áudio esgotada"
+        send_text(db, user, aviso)
+        return ""
+
     message.status = "TRANSCRIBING"
     result = get_speech_provider().transcribe(audio, "audio/ogg")
     if not result.ok:
         message.error = result.error
         return ""
     record_usage(db, user_id=user.id, operation="transcribe", result=result)
+    billing.consume(db, user, "audio_minutes", amount=minutos)
     return result.text
 
 

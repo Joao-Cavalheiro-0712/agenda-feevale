@@ -16,6 +16,17 @@
   {% endif %}
 </div>
 
+<div class="ciclo" role="group" aria-label="Ciclo de cobrança">
+  <a href="{{ url_for('pages.plans_page', ciclo='MONTHLY') }}"
+     class="{{ 'ativo' if ciclo == 'MONTHLY' }}"
+     {% if ciclo == 'MONTHLY' %}aria-current="true"{% endif %}>Mensal</a>
+  <a href="{{ url_for('pages.plans_page', ciclo='ANNUAL') }}"
+     class="{{ 'ativo' if ciclo == 'ANNUAL' }}"
+     {% if ciclo == 'ANNUAL' %}aria-current="true"{% endif %}>
+    Anual <span class="tag marca">−{{ desconto_anual }}%</span>
+  </a>
+</div>
+
 <div class="card" style="margin-bottom:var(--s6)">
   <p class="label" style="margin:0 0 var(--s3)">Uso deste mês</p>
   <div class="resumo">
@@ -27,6 +38,10 @@
       <span class="n num">{{ resumo.usage.mensagens }}</span>
       <span class="l">de {{ resumo.usage.mensagens_limite if resumo.usage.mensagens_limite >= 0 else '∞' }} capturas</span>
     </div>
+    <div class="metrica">
+      <span class="n num">{{ resumo.usage.audio }}</span>
+      <span class="l">de {{ resumo.usage.audio_limite if resumo.usage.audio_limite >= 0 else '∞' }} min de áudio</span>
+    </div>
   </div>
 </div>
 
@@ -36,10 +51,21 @@
       <h3 class="h-card" style="margin:0">{{ plano.name }}</h3>
       {% if plano.tier == resumo.plan.tier %}<span class="tag marca">atual</span>{% endif %}
       {% if plano.price_month %}
-        <span class="pull num" style="font-weight:700">R$ {{ '%.2f'|format(plano.price_month) }}<span class="tiny muted">/mês</span></span>
+        {% if ciclo == 'ANNUAL' %}
+          <span class="pull num" style="font-weight:700">R$ {{ '%.2f'|format(plano.price_annual_monthly) }}<span class="tiny muted">/mês</span></span>
+        {% else %}
+          <span class="pull num" style="font-weight:700">R$ {{ '%.2f'|format(plano.price_month) }}<span class="tiny muted">/mês</span></span>
+        {% endif %}
       {% endif %}
     </div>
-    <p class="tiny muted" style="margin:var(--s2) 0 var(--s3)">{{ plano.tagline }}</p>
+    <p class="tiny muted" style="margin:var(--s2) 0 var(--s1)">{{ plano.tagline }}</p>
+    {% if plano.para_quem %}<p class="tiny" style="margin:0 0 var(--s3);color:var(--ink-4)">Para: {{ plano.para_quem }}</p>{% endif %}
+    {% if plano.price_month and ciclo == 'ANNUAL' %}
+      <p class="tiny" style="margin:0 0 var(--s3)">
+        R$ {{ '%.2f'|format(plano.price_annual) }} no ano —
+        <strong>economiza R$ {{ '%.2f'|format(plano.annual_savings) }}</strong>
+      </p>
+    {% endif %}
     <ul style="margin:0 0 var(--s4);padding-left:1.1em">
       {% for item in plano.highlights %}<li class="tiny" style="margin-bottom:4px">{{ item }}</li>{% endfor %}
     </ul>
@@ -47,8 +73,9 @@
       <form method="post" action="{{ url_for('pages.subscribe_plan') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="plan" value="{{ plano.tier }}">
+        <input type="hidden" name="cycle" value="{{ ciclo }}">
         <button class="btn {{ 'marca' if plano.price_month else 'ghost' }} block" type="submit">
-          {% if plano.price_month %}Assinar {{ plano.name }}{% else %}Voltar para o grátis{% endif %}
+          {% if plano.price_month %}Assinar {{ plano.name }}{% if ciclo == 'ANNUAL' %} por ano{% endif %}{% else %}Voltar para o grátis{% endif %}
         </button>
       </form>
     {% endif %}

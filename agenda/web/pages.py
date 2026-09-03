@@ -40,6 +40,7 @@ from agenda.core.events import event_card, refresh_statuses
 from agenda.ingest import pipeline
 from agenda.models import (
     AiUsage,
+    BillingCycle,
     DegreeKind,
     GuardianLink,
     LinkToken,
@@ -51,6 +52,7 @@ from agenda.models import (
     Location,
     Notification,
     PeriodKind,
+    PlanTier,
     SharedCollection,
     Subject,
     SubjectStatus,
@@ -58,7 +60,7 @@ from agenda.models import (
     User,
     UserPhone,
 )
-from agenda.security import password_problems, share_code
+from agenda.security import password_problems, share_code, sign_payload
 from agenda.web.deps import (
     _client_ip,
     admin_required,
@@ -945,16 +947,75 @@ def privacy_toggle_ai():
 
 
 # --------------------------------------------------------------------------- #
+# Indicação
+# --------------------------------------------------------------------------- #
+# Quanto tempo o código fica guardado no navegador de quem clicou. 30 dias
+# porque ninguém se cadastra no mesmo minuto em que recebe o link: a pessoa vê
+# no WhatsApp, guarda e volta no domingo à noite para organizar a semana.
+REFERRAL_COOKIE = "grifo_i"
+REFERRAL_COOKIE_DIAS = 30
+
+
+@bp.route("/i/<code>")
+@limited("referral")
+def referral_landing(code: str):
+    """Porta de entrada do link compartilhado.
+
+    Guarda o código num cookie assinado e manda para o cadastro. Não confirma
+    nem nega que o código existe: quem varre códigos não aprende nada.
+    """
+    from agenda.core import referrals
+
+    destino = url_for("auth.register")
+    if current_user() is not None:
+        destino = url_for("pages.invite_page")
+
+    resposta = make_response(redirect(destino))
+    limpo = (code or "").strip().upper()[:16]
+    if limpo.isalnum():
+        resposta.set_cookie(
+            REFERRAL_COOKIE,
+            sign_payload({"c": limpo}, ttl_seconds=REFERRAL_COOKIE_DIAS * 86400),
+            max_age=REFERRAL_COOKIE_DIAS * 86400,
+            httponly=True, samesite="Lax", secure=config.IS_PRODUCTION,
+        )
+        dono = referrals.user_by_code(db(), limpo)
+        if dono is not None:
+            flash(f"{dono.name or 'Alguém'} te convidou para o {config.APP_NAME}.", "success")
+    return resposta
+
+
+@bp.route("/convidar")
+@login_required
+def invite_page():
+    from agenda.core import referrals
+
+    user = current_user()
+    resumo = referrals.summary(db(), user)
+    return render_template(
+        "invite.html",
+        r=resumo,
+        pecas=referrals.peças_de_compartilhamento(resumo, user),
+        **_shell(active="profile"),
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Planos (SPEC §96)
 # --------------------------------------------------------------------------- #
 @bp.route("/planos")
 @login_required
 def plans_page():
     user = current_user()
+    ciclo = request.args.get("ciclo", "")
+    if ciclo not in {c.value for c in BillingCycle}:
+        ciclo = BillingCycle.MONTHLY.value
     return render_template(
         "plans.html",
-        planos=[billing.PLANS[key] for key in ("FREE", "STUDENT", "FAMILY")],
+        planos=[billing.PLANS[key] for key in billing.PLANOS_PUBLICOS],
         resumo=billing.summary(db(), user),
+        ciclo=ciclo,
+        desconto_anual=int(billing.ANNUAL_DISCOUNT * 100),
         **_shell(active="profile"),
     )
 
@@ -972,17 +1033,31 @@ def start_trial():
 def subscribe_plan():
     """Troca de plano. A cobrança real depende do gateway configurado."""
     plano = request.form.get("plan", "")
-    if plano not in billing.PLANS:
+    ciclo = request.form.get("cycle", BillingCycle.MONTHLY.value)
+    if plano not in billing.PLANS or plano == PlanTier.INSTITUTION.value:
         flash("Plano inválido.", "error")
         return redirect(url_for("pages.plans_page"))
-    if not config.flag("billing_enabled") and plano != "FREE":
+    if ciclo not in {c.value for c in BillingCycle}:
+        ciclo = BillingCycle.MONTHLY.value
+    if not config.flag("billing_enabled") and plano != PlanTier.FREE.value:
         flash(
             "A cobrança ainda não está ligada neste ambiente. "
             "Configure o gateway para aceitar pagamentos.",
             "error",
         )
         return redirect(url_for("pages.plans_page"))
-    billing.change_plan(db(), current_user(), plano)
+    from agenda.core import referrals
+
+    user = current_user()
+    billing.change_plan(db(), user, plano, cycle=ciclo)
+    if plano != PlanTier.FREE.value:
+        # A indicação entra em carência agora; a recompensa de quem indicou só
+        # nasce depois da janela de reembolso (ver core/referrals.py).
+        referrals.mark_paid(db(), user)
+        # Crédito que a pessoa já tinha a receber entra na hora que ela assina.
+        meses = referrals.apply_credits(db(), user)
+        if meses:
+            flash(f"Apliquei {meses} mês(es) grátis das suas indicações.", "success")
     flash("Plano atualizado.", "success")
     return redirect(url_for("pages.plans_page"))
 

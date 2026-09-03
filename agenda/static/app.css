@@ -557,3 +557,16 @@ blockquote.trecho {
   border-bottom-color: var(--rule-strong);
 }
 .tabela td { color: var(--ink-2); }
+
+/* Seletor de ciclo de cobrança — dois estados, sem parecer aba de navegador */
+.ciclo {
+  display: inline-flex; gap: 2px; padding: 3px; margin-bottom: var(--s5);
+  background: var(--paper-2); border: 1px solid var(--rule); border-radius: 999px;
+}
+.ciclo a {
+  display: flex; align-items: center; gap: 6px; padding: 8px var(--s4);
+  border-radius: 999px; font-size: .84rem; color: var(--ink-3);
+  text-decoration: none; white-space: nowrap; min-height: 40px;
+}
+.ciclo a.ativo { background: var(--ink); color: var(--paper); font-weight: 600; }
+.ciclo a.ativo .tag { background: var(--grifo); color: var(--ink); border-color: transparent; }

@@ -77,6 +77,26 @@ def cleanup_media() -> int:
     return removed
 
 
+def referral_tick() -> None:
+    """Qualifica indicações que passaram da carência e concede as recompensas.
+
+    Uma vez por dia basta: a carência é de dias, não de minutos, e rodar de
+    madrugada mantém a escrita concentrada fora do horário de uso.
+    """
+    from agenda.core import referrals
+    from agenda.db import SessionLocal
+
+    with SessionLocal() as db:
+        try:
+            resultado = referrals.run_qualification(db)
+            db.commit()
+            if resultado["qualificadas"] or resultado["recompensas"]:
+                print(f"[jobs] indicações: {resultado}")
+        except Exception as erro:  # noqa: BLE001 - worker nunca derruba o processo
+            db.rollback()
+            print(f"[jobs] falha ao qualificar indicações: {erro}")
+
+
 def start() -> None:  # pragma: no cover - infra
     global _scheduler
     if _scheduler is not None:
@@ -91,6 +111,9 @@ def start() -> None:  # pragma: no cover - infra
     )
     _scheduler.add_job(
         cleanup_media, "cron", hour=3, minute=0, id="cleanup.media", replace_existing=True
+    )
+    _scheduler.add_job(
+        referral_tick, "cron", hour=4, minute=0, id="referral.qualify", replace_existing=True
     )
     _scheduler.start()
     print(f"[jobs] scheduler ativo (tick {config.NOTIFICATION_TICK_SECONDS}s).")

@@ -155,6 +155,11 @@ def register():
             origin="web",
             ai_processing=request.form.get("ai_processing", "on") in ("on", "1", "true"),
         )
+        # Indicação: o código chega num cookie assinado deixado por /i/<codigo>.
+        # Falha aqui nunca pode impedir alguém de criar a conta, então tudo é
+        # silencioso — quem perde é o programa de indicação, não o usuário.
+        _atribuir_indicacao(user)
+
         log(db(), user_id=user.id, actor="user", action="REGISTER", object_type="user",
             object_id=user.id, origin="web",
             after={"terms": privacy.TERMS_VERSION, "privacy": privacy.PRIVACY_VERSION})
@@ -162,6 +167,28 @@ def register():
         return redirect(url_for("pages.onboarding"))
 
     return render_template("auth/register.html")
+
+
+def _atribuir_indicacao(user: User) -> None:
+    """Lê o cookie de indicação e registra quem trouxe quem."""
+    from agenda.core import referrals
+    from agenda.security import verify_payload
+    from agenda.web.pages import REFERRAL_COOKIE
+
+    bruto = request.cookies.get(REFERRAL_COOKIE)
+    if not bruto:
+        return
+    dados = verify_payload(bruto)
+    codigo = (dados or {}).get("c", "")
+    if not codigo:
+        return
+    try:
+        referrals.attribute(
+            db(), user, codigo,
+            ip=_client_ip(), user_agent=request.headers.get("User-Agent", ""),
+        )
+    except Exception:  # noqa: BLE001 - indicação nunca derruba o cadastro
+        db().rollback()
 
 
 @bp.post("/sair")

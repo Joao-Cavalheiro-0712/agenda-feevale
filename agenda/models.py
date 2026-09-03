@@ -178,6 +178,9 @@ class User(Base):
     # Consentimento para enviar conteúdo a provedor de interpretação automática.
     # Revogável: sem ele o app continua funcionando com heurística local.
     ai_processing_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Código de indicação próprio, gerado no primeiro uso. Curto para caber
+    # numa mensagem de WhatsApp e ser ditado em voz alta.
+    referral_code: Mapped[str | None] = mapped_column(String(16), unique=True, index=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -778,10 +781,24 @@ class LoginAttempt(Base):
 # Assinaturas e consumo (SPEC §96, §112)
 # --------------------------------------------------------------------------- #
 class PlanTier(str, enum.Enum):
+    """A escada de planos.
+
+    Todos os pagos têm o produto inteiro; o que muda é **quanto** de uso cabe.
+    É o formato certo para um produto de IA, porque o custo escala com o uso e
+    não com o recurso: quem manda 40 áudios por dia custa mais que quem manda
+    dois, mesmo usando exatamente as mesmas telas.
+    """
+
     FREE = "FREE"
-    STUDENT = "STUDENT"        # plano individual
-    FAMILY = "FAMILY"          # responsável + estudantes
+    STUDENT = "STUDENT"        # R$ 19,90 — individual
+    PRO = "PRO"                # R$ 29,90 — uso alto
+    FAMILY = "FAMILY"          # R$ 39,90 — responsável + estudantes
     INSTITUTION = "INSTITUTION"
+
+
+class BillingCycle(str, enum.Enum):
+    MONTHLY = "MONTHLY"
+    ANNUAL = "ANNUAL"
 
 
 class SubscriptionStatus(str, enum.Enum):
@@ -799,6 +816,7 @@ class Subscription(Base):
         ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
     )
     plan: Mapped[str] = mapped_column(String(20), default=PlanTier.FREE.value)
+    cycle: Mapped[str] = mapped_column(String(10), default=BillingCycle.MONTHLY.value)
     status: Mapped[str] = mapped_column(String(20), default=SubscriptionStatus.ACTIVE.value)
     provider: Mapped[str] = mapped_column(String(30), default="none")
     external_id: Mapped[str] = mapped_column(String(120), default="")
@@ -876,6 +894,77 @@ class StudyBlock(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     subject: Mapped[Subject | None] = relationship()
+
+
+# --------------------------------------------------------------------------- #
+# Indicação — crescimento sem tráfego pago
+# --------------------------------------------------------------------------- #
+class ReferralStatus(str, enum.Enum):
+    """O ciclo de vida de uma indicação.
+
+    A recompensa só nasce em QUALIFIED, e QUALIFIED exige pagamento confirmado
+    E a janela de reembolso vencida. Essa ordem é a defesa antifraude que
+    importa: nenhum limite de IP resolve, e cartão que passou e não voltou é a
+    melhor prova de gente de verdade que existe.
+    """
+
+    SIGNED_UP = "SIGNED_UP"    # entrou pelo código, ainda não pagou
+    QUALIFIED = "QUALIFIED"    # pagou e passou da janela de reembolso
+    REWARDED = "REWARDED"      # já virou recompensa para quem indicou
+    REJECTED = "REJECTED"      # antifraude recusou
+
+
+class Referral(Base):
+    """Quem trouxe quem — uma linha por pessoa indicada."""
+
+    __tablename__ = "referrals"
+    __table_args__ = (
+        # Cada pessoa é indicada uma única vez, para sempre. Sem isto, dava
+        # para trocar a atribuição depois e revender a mesma indicação.
+        UniqueConstraint("referred_id", name="uq_referral_referred"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    referrer_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    referred_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    code: Mapped[str] = mapped_column(String(16), index=True)
+    status: Mapped[str] = mapped_column(String(20), default=ReferralStatus.SIGNED_UP.value)
+    # Sinais para auditoria de fraude. IP em hash, nunca em claro.
+    signup_ip_hash: Mapped[str] = mapped_column(String(64), default="")
+    signup_user_agent: Mapped[str] = mapped_column(String(300), default="")
+    mesmo_ip_do_indicador: Mapped[bool] = mapped_column(Boolean, default=False)
+    rejection_reason: Mapped[str] = mapped_column(String(60), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+    qualified_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    rewarded_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class RewardKind(str, enum.Enum):
+    FREE_MONTH = "FREE_MONTH"          # mês grátis por indicações qualificadas
+    INVITEE_DISCOUNT = "INVITEE_DISCOUNT"  # desconto de boas-vindas de quem foi indicado
+
+
+class Reward(Base):
+    """Crédito concedido a uma conta. Nunca é apagado — é o extrato."""
+
+    __tablename__ = "rewards"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(30), default=RewardKind.FREE_MONTH.value)
+    months: Mapped[int] = mapped_column(Integer, default=1)
+    reason: Mapped[str] = mapped_column(String(160), default="")
+    # Quando o crédito foi de fato aplicado na assinatura. Nulo = a receber.
+    applied_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_reason: Mapped[str] = mapped_column(String(160), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 # --------------------------------------------------------------------------- #

@@ -24,7 +24,9 @@ def test_plano_pago_libera_recursos(db, user):
     db.commit()
     assert billing.allows(db, user, billing.CAN_USE_WHATSAPP)
     assert billing.allows(db, user, billing.CAN_SYNC_CALENDAR)
-    assert billing.limit_of(db, user, billing.MAX_DOCUMENT_IMPORTS) == 100
+    # Não fixa o número: o limite é decisão de negócio e muda. O que o teste
+    # protege é a FORMA da escada — cada plano pago cabe mais que o anterior.
+    assert billing.limit_of(db, user, billing.MAX_DOCUMENT_IMPORTS) > 3
 
 
 def test_quota_bloqueia_quando_estoura(db, user):
@@ -108,3 +110,102 @@ def test_plano_invalido_e_recusado(client, db, user):
     client.post("/planos/assinar", data={"csrf_token": _csrf(client), "plan": "PLANO_PIRATA"})
     db.expire_all()
     assert billing.active_plan(db, user).tier == PlanTier.FREE.value
+
+
+# --------------------------------------------------------------------------- #
+# A escada de planos: forma, ciclo e sustentação
+# --------------------------------------------------------------------------- #
+def test_a_escada_e_monotonica(db, user):
+    """Plano mais caro nunca pode caber menos que o mais barato."""
+    from agenda.models import PlanTier as T
+
+    escada = [T.FREE.value, T.STUDENT.value, T.PRO.value, T.FAMILY.value]
+    quotas = (billing.MAX_AI_MESSAGES, billing.MAX_DOCUMENT_IMPORTS,
+              billing.MAX_AUDIO_MINUTES, billing.MAX_CONTEXTS)
+    for quota in quotas:
+        valores = [billing.PLANS[p].features[quota] for p in escada]
+        assert valores == sorted(valores), f"{quota} não é crescente: {valores}"
+
+
+def test_precos_sao_os_combinados():
+    from agenda.models import PlanTier as T
+
+    assert billing.PLANS[T.STUDENT.value].price_month == 19.90
+    assert billing.PLANS[T.PRO.value].price_month == 29.90
+    assert billing.PLANS[T.FAMILY.value].price_month == 39.90
+    assert billing.PLANS[T.FREE.value].price_month == 0.0
+
+
+def test_anual_da_vinte_por_cento_de_desconto():
+    plano = billing.PLANS["STUDENT"]
+    assert plano.price_annual == round(19.90 * 12 * 0.8, 2)
+    assert plano.price_annual_monthly < plano.price_month
+    assert plano.annual_savings > 0
+
+
+def test_ciclo_anual_estende_o_periodo(db, user):
+    from agenda.models import BillingCycle, PlanTier as T
+
+    sub = billing.change_plan(db, user, T.PRO.value, cycle=BillingCycle.ANNUAL.value)
+    db.commit()
+    assert sub.cycle == BillingCycle.ANNUAL.value
+    restantes = (sub.current_period_end.replace(tzinfo=None) - __import__("datetime").datetime.utcnow()).days
+    assert restantes > 300, "assinatura anual tem de valer o ano"
+
+
+def test_mediana_paga_a_conta_em_todo_plano_pago():
+    """A margem agregada se decide na mediana, não na cauda."""
+    for linha in billing.margin_report():
+        if linha["preco_mes"] == 0:
+            continue
+        assert linha["percentual_mediano"] < 25, (
+            f"{linha['plano']}: o assinante mediano consome "
+            f"{linha['percentual_mediano']}% do preço em IA"
+        )
+
+
+def test_a_cauda_tem_teto(db, user):
+    """Quota é o que limita o prejuízo de uma conta abusiva.
+
+    Sem teto, uma conta só poderia gerar custo ilimitado. Com teto, o pior
+    caso por conta é conhecido — e é isso que torna a cauda aceitável.
+    """
+    for linha in billing.margin_report():
+        if linha["preco_mes"] == 0:
+            continue
+        prejuizo_maximo = linha["custo_pior_caso"] - linha["preco_mes"]
+        assert prejuizo_maximo < linha["preco_mes"], (
+            f"{linha['plano']}: uma conta na cauda custa mais que o dobro do preço"
+        )
+
+
+def test_audio_e_medido_e_arredonda_para_cima():
+    assert billing.estimate_audio_minutes(0) == 0
+    assert billing.estimate_audio_minutes(1000) == 1, "áudio curto conta 1 minuto"
+    # 16 kbps ≈ 2 KB/s ≈ 120 KB por minuto.
+    assert billing.estimate_audio_minutes(120_000) == 1
+    assert billing.estimate_audio_minutes(600_000) == 5
+
+
+def test_quota_de_audio_bloqueia_transcricao(app, db, user):
+    from agenda.models import PlanTier as T
+
+    billing.change_plan(db, user, T.FREE.value)
+    limite = billing.limit_of(db, user, billing.MAX_AUDIO_MINUTES)
+    billing.consume(db, user, "audio_minutes", amount=limite)
+    db.commit()
+
+    client = app.test_client()
+    client.get("/entrar")
+    with client.session_transaction() as sessao:
+        token = sessao.get("csrf")
+    client.post("/entrar", data={"csrf_token": token, "email": user.email,
+                                 "password": "segredo123"})
+    with client.session_transaction() as sessao:
+        token = sessao.get("csrf")
+    resposta = client.post(
+        "/api/capture",
+        data={"audio": (__import__("io").BytesIO(b"x" * 300_000), "a.webm")},
+        headers={"X-CSRF-Token": token}, content_type="multipart/form-data",
+    )
+    assert resposta.status_code == 402, "quota de áudio não bloqueou"

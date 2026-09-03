@@ -18,9 +18,8 @@ import datetime as dt
 
 import pytest
 
-from agenda.core import academic, events as events_core, family, privacy
-from agenda.models import EducationContext, User
-from agenda.security import hash_password
+from agenda.core import academic, events as events_core, family
+from agenda.models import User
 
 
 # --------------------------------------------------------------------------- #

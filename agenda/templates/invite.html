@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% from 'partials/icons.html' import icon %}
+{% block title %}Convidar · {{ APP_NAME }}{% endblock %}
+{% block topbar %}
+<header class="topbar"><div class="wrap">
+  <a class="icon-btn" href="{{ url_for('pages.profile') }}" aria-label="Voltar">{{ icon('volta') }}</a>
+  <strong style="font-size:.95rem">Convidar</strong>
+</div></header>
+{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <p class="label kicker">Seu código</p>
+  <h2 class="h-page">Chame {{ r.meta }}, ganhe um <span class="grifo-sob">mês grátis</span></h2>
+  <p class="sub">
+    Quem entrar pelo seu link ganha {{ r.desconto_do_convidado }}% de desconto na primeira
+    cobrança. Quando {{ r.meta }} pessoas virarem assinantes, seu próximo mês é por nossa conta.
+  </p>
+</div>
+
+<div class="card" style="text-align:center">
+  <p class="label" style="margin:0 0 var(--s2)">Seu código</p>
+  <p class="num" style="font-size:2rem;font-weight:700;letter-spacing:.12em;margin:0">{{ r.codigo }}</p>
+  <p class="tiny muted" style="margin:var(--s2) 0 var(--s4);word-break:break-all">{{ r.link }}</p>
+  <button class="btn marca block" type="button" data-copiar="{{ r.link }}">Copiar meu link</button>
+</div>
+
+<section class="section">
+  <header><h3>Como está indo</h3></header>
+  <div class="resumo">
+    <div class="metrica"><span class="n num">{{ r.convidados }}</span><span class="l">entraram pelo link</span></div>
+    <div class="metrica"><span class="n num">{{ r.valendo }}</span><span class="l">viraram assinantes</span></div>
+    <div class="metrica"><span class="n num">{{ r.meses_a_receber }}</span><span class="l">meses a receber</span></div>
+  </div>
+  <p class="tiny muted" style="margin-top:var(--s3)">
+    {% if r.valendo %}
+      Faltam <strong>{{ r.faltam_para_o_proximo }}</strong> para o próximo mês grátis.
+    {% else %}
+      A conta só vale quando a pessoa vira assinante — por isso a recompensa é de verdade.
+    {% endif %}
+  </p>
+</section>
+
+<section class="section">
+  <header><h3>Mensagens prontas</h3></header>
+  <p class="tiny muted" style="margin:0 0 var(--s4)">Toque para copiar e cole onde quiser.</p>
+  {% for peca in pecas %}
+    <div class="card" style="margin-bottom:var(--s3)">
+      <p class="label" style="margin:0 0 var(--s2)">{{ peca.titulo }}</p>
+      <p class="tiny" style="margin:0 0 var(--s3);line-height:1.6">{{ peca.texto }}</p>
+      <button class="btn sm ghost" type="button" data-copiar="{{ peca.texto }}">Copiar</button>
+    </div>
+  {% endfor %}
+</section>
+
+<p class="tiny muted" style="margin:var(--s5) 0 var(--s7)">
+  A recompensa entra depois que a assinatura do seu convidado passa da janela de
+  reembolso. Indicação cancelada ou reembolsada não conta — assim o programa
+  continua de pé para todo mundo.
+</p>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ nonce }}">
+document.addEventListener("click", async (evento) => {
+  const alvo = evento.target.closest("[data-copiar]");
+  if (!alvo) return;
+  const texto = alvo.dataset.copiar;
+  try {
+    await navigator.clipboard.writeText(texto);
+  } catch (erro) {
+    // Alguns navegadores só liberam a área de transferência em HTTPS.
+    const campo = document.createElement("textarea");
+    campo.value = texto;
+    document.body.appendChild(campo);
+    campo.select();
+    try { document.execCommand("copy"); } finally { campo.remove(); }
+  }
+  const original = alvo.textContent;
+  alvo.textContent = "Copiado";
+  setTimeout(() => { alvo.textContent = original; }, 1600);
+});
+</script>
+{% endblock %}
