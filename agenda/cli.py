@@ -4,6 +4,7 @@
     python -m agenda.cli secret       gera um SECRET_KEY forte
     python -m agenda.cli migrate      aplica as migrations pendentes
     python -m agenda.cli check        verificação de sanidade da configuração
+    python -m agenda.cli reset-schema apaga o schema (exige ALLOW_SCHEMA_RESET=1)
 """
 from __future__ import annotations
 
@@ -65,20 +66,36 @@ def _migrate() -> int:
 
 
 def _adopt_baseline(conexao, cfg, inspetor) -> None:
-    """Adota um banco que já tem as tabelas, mas nunca foi versionado.
+    """Adota um banco que já tem TODAS as tabelas, mas nunca foi versionado.
 
-    Só age no caso inequívoco: existem tabelas da aplicação E não existe
-    `alembic_version`. Aí marcamos a revisão base como aplicada, em vez de
-    tentar recriar tudo. Se `alembic_version` existir com outra revisão, não
-    mexemos: divergência de schema precisa aparecer, não ser silenciada.
+    Só age no caso inequívoco: o schema está completo e não existe
+    `alembic_version`. Se estiver pela metade (uma migration que morreu no
+    meio, por exemplo), paramos e explicamos — marcar como aplicado um schema
+    incompleto seria esconder o problema até ele aparecer em produção.
     """
+    import importlib
+
     from alembic import command
 
+    from agenda.db import Base
+
+    importlib.import_module("agenda.models")  # sem isso o metadata vem vazio
     tabelas = set(inspetor.get_table_names())
-    if "alembic_version" in tabelas or "users" not in tabelas:
+    if "alembic_version" in tabelas or not tabelas:
         return
-    print("banco já tem as tabelas e nenhuma versão: marcando a revisão base.")
-    command.stamp(cfg, "head")
+
+    esperadas = set(Base.metadata.tables)
+    faltando = esperadas - tabelas
+    if faltando and tabelas & esperadas:
+        raise SystemExit(
+            "Schema incompleto e sem versão do Alembic. Faltam: "
+            + ", ".join(sorted(faltando)[:8])
+            + ". Rode `python -m agenda.cli reset-schema` (apaga tudo) num banco "
+            "sem dados, ou corrija o schema à mão antes de seguir."
+        )
+    if not faltando:
+        print("banco completo e sem versão: marcando a revisão base.")
+        command.stamp(cfg, "head")
 
 
 def _check() -> int:
@@ -105,7 +122,47 @@ def _check() -> int:
     return 0
 
 
-COMMANDS = {"vapid": _vapid, "secret": _secret, "migrate": _migrate, "check": _check}
+def _reset_schema() -> int:
+    """Apaga o schema inteiro. Só para banco descartável.
+
+    Exige `ALLOW_SCHEMA_RESET=1` no ambiente — nunca roda por acidente, e nunca
+    faz parte do start normal da aplicação.
+    """
+    import importlib
+    import os
+
+    from sqlalchemy import text
+
+    from agenda.db import engine
+
+    if os.environ.get("ALLOW_SCHEMA_RESET") != "1":
+        print("recusado: defina ALLOW_SCHEMA_RESET=1 para confirmar que o banco é descartável.")
+        return 1
+
+    with engine.connect() as conexao:
+        if engine.url.get_backend_name().startswith("postgres"):
+            conexao.execute(text("DROP SCHEMA public CASCADE"))
+            conexao.execute(text("CREATE SCHEMA public"))
+            conexao.commit()
+            print("schema public recriado do zero.")
+        else:
+            from agenda.db import Base
+
+            importlib.import_module("agenda.models")  # sem isso o metadata vem vazio
+            Base.metadata.drop_all(engine)
+            conexao.execute(text("DROP TABLE IF EXISTS alembic_version"))
+            conexao.commit()
+            print("tabelas removidas.")
+    return 0
+
+
+COMMANDS = {
+    "vapid": _vapid,
+    "secret": _secret,
+    "migrate": _migrate,
+    "check": _check,
+    "reset-schema": _reset_schema,
+}
 
 
 def main(argv: list[str] | None = None) -> int:
