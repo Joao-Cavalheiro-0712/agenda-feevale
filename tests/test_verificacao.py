@@ -12,10 +12,12 @@ Três coisas são testadas aqui porque as três já derrubaram SaaS de verdade:
 from __future__ import annotations
 
 import datetime as dt
+import json
 import re
 
 import pytest
 
+from agenda import config
 from agenda.channels import email as email_channel
 from agenda.core import referrals, verification
 from agenda.models import (
@@ -344,3 +346,117 @@ def test_indicacao_de_email_nao_confirmado_e_recusada(app, db, user):
     db.expire_all()
     assert registro.status == ReferralStatus.REJECTED.value
     assert "confirmado" in registro.rejection_reason
+
+
+# --------------------------------------------------------------------------- #
+# Provedores de e-mail
+#
+# A recuperação de conta depende inteiramente daqui. O que estes testes
+# garantem: a escolha do provedor é previsível, a chave nunca vaza no log, e
+# uma recusa do provedor NUNCA vira "enviado com sucesso" — um e-mail que
+# "foi enviado" e nunca chega deixa a pessoa esperando para sempre.
+# --------------------------------------------------------------------------- #
+class _RespostaFalsa:
+    def __init__(self, status, corpo):
+        self.status_code = status
+        self._corpo = corpo
+
+    def json(self):
+        return self._corpo
+
+
+def test_chave_do_resend_vence_o_smtp(monkeypatch):
+    """Ninguém coloca uma chave de API para continuar usando SMTP."""
+    monkeypatch.setattr(config, "RESEND_API_KEY", "re_teste")
+    monkeypatch.setattr(config, "SMTP_HOST", "smtp.exemplo.com")
+    email_channel.reset_provider()
+    assert email_channel.provider().name == "resend"
+    email_channel.reset_provider()
+
+
+def test_sem_chave_nenhuma_o_provedor_e_honesto(monkeypatch):
+    monkeypatch.setattr(config, "RESEND_API_KEY", "")
+    monkeypatch.setattr(config, "SMTP_HOST", "")
+    email_channel.reset_provider()
+    prov = email_channel.provider()
+    assert prov.name == "none"
+    assert prov.configured is False
+    # E, o mais importante: não finge que enviou.
+    assert email_channel.send(to="a@b.c", subject="x", text="y").ok is False
+    email_channel.reset_provider()
+
+
+def test_resend_envia_e_devolve_o_id(monkeypatch):
+    monkeypatch.setattr(config, "RESEND_API_KEY", "re_teste")
+    monkeypatch.setattr(config, "EMAIL_FROM", "Grifo <oi@grifo.app>")
+    enviados = []
+
+    def falso_post(url, json=None, headers=None, timeout=None):
+        enviados.append({"url": url, "json": json, "headers": headers})
+        return _RespostaFalsa(200, {"id": "msg_abc123"})
+
+    import requests
+
+    monkeypatch.setattr(requests, "post", falso_post)
+    email_channel.reset_provider()
+
+    envio = email_channel.send(to="ana@example.com", subject="Confirme", text="link")
+    assert envio.ok is True
+    assert envio.detalhe == "msg_abc123"
+
+    pedido = enviados[0]
+    assert pedido["json"]["from"] == "Grifo <oi@grifo.app>"
+    assert pedido["json"]["to"] == ["ana@example.com"]
+    # A chave viaja no cabeçalho, nunca no corpo.
+    assert "re_teste" not in json.dumps(pedido["json"])
+    email_channel.reset_provider()
+
+
+def test_recusa_do_resend_nao_vira_sucesso(monkeypatch, capsys):
+    """Domínio não verificado é o erro mais comum no primeiro dia."""
+    monkeypatch.setattr(config, "RESEND_API_KEY", "re_teste")
+    monkeypatch.setattr(config, "EMAIL_FROM", "Grifo <oi@grifo.app>")
+
+    import requests
+
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _RespostaFalsa(
+        403, {"message": "The grifo.app domain is not verified"}))
+    email_channel.reset_provider()
+
+    envio = email_channel.send(to="ana@example.com", subject="x", text="y")
+    assert envio.ok is False
+    assert "not verified" in envio.detalhe, "o motivo tem de chegar a quem configura"
+
+    registrado = capsys.readouterr().out
+    assert "not verified" in registrado
+    assert "re_teste" not in registrado, "a chave nunca pode entrar no log"
+    email_channel.reset_provider()
+
+
+def test_resend_fora_do_ar_nao_derruba_o_cadastro(monkeypatch):
+    """Falha de rede vira envio falso, não exceção subindo pela rota."""
+    monkeypatch.setattr(config, "RESEND_API_KEY", "re_teste")
+    monkeypatch.setattr(config, "EMAIL_FROM", "Grifo <oi@grifo.app>")
+
+    import requests
+
+    def explode(*_a, **_k):
+        raise ConnectionError("sem rota para o host")
+
+    monkeypatch.setattr(requests, "post", explode)
+    email_channel.reset_provider()
+    assert email_channel.send(to="a@b.c", subject="x", text="y").ok is False
+    email_channel.reset_provider()
+
+
+def test_email_nunca_aparece_inteiro_no_log(monkeypatch, capsys):
+    monkeypatch.setattr(config, "RESEND_API_KEY", "")
+    monkeypatch.setattr(config, "SMTP_HOST", "")
+    monkeypatch.setattr(config, "IS_PRODUCTION", True)
+    email_channel.reset_provider()
+
+    email_channel.send(to="anabeatriz@example.com", subject="x", text="y")
+    saida = capsys.readouterr().out
+    assert "anabeatriz@example.com" not in saida
+    assert "an***@example.com" in saida
+    email_channel.reset_provider()

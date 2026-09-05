@@ -189,6 +189,16 @@ SMTP_USER = _env("SMTP_USER")
 SMTP_PASSWORD = _env("SMTP_PASSWORD")
 SMTP_FROM = _env("SMTP_FROM", f"{APP_NAME} <nao-responda@grifo.app>")
 
+# Resend por HTTPS: uma chave só, no lugar dos cinco campos de SMTP. A
+# vantagem não é digitar menos — é que a API devolve o MOTIVO da recusa
+# ("domínio não verificado"), enquanto o SMTP devolve um erro genérico que não
+# ajuda ninguém a consertar nada.
+RESEND_API_KEY = _env("RESEND_API_KEY")
+
+# Remetente, comum aos dois caminhos. `SMTP_FROM` continua valendo como apelido
+# para não quebrar quem já configurou.
+EMAIL_FROM = _env("EMAIL_FROM") or SMTP_FROM
+
 # Validade dos links por e-mail.
 EMAIL_VERIFY_TTL_HOURS = int(_env("EMAIL_VERIFY_TTL_HOURS", "48"))
 PASSWORD_RESET_TTL_MINUTES = int(_env("PASSWORD_RESET_TTL_MINUTES", "30"))

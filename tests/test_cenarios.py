@@ -651,9 +651,15 @@ def test_lembrete_sem_materia_aparece_na_agenda(adulto, db):
     "1 entrega esta semana" e mostrava lista vazia logo abaixo.
     """
     client = adulto["client"]
+    # A data precisa cair DENTRO da semana corrente, senão /semana legitimamente
+    # não mostra nada e o teste falha de sexta a domingo — o que já acontecia.
+    hoje = dt.date.today()
+    fim_da_semana = hoje + dt.timedelta(days=6 - hoje.weekday())
+    quando = min(hoje + dt.timedelta(days=2), fim_da_semana)
+
     events_core.create_event(
         db, adulto["user"], title="Pagar a mensalidade", event_type="ADMINISTRATIVE",
-        date=dt.date.today() + dt.timedelta(days=2),
+        date=quando,
     )
     db.commit()
 
